@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc -p tsconfig.build.json --noEmit
+
+      - name: Test
+        run: bun test tests/core tests/azure
+
+      - name: Build
+        run: bun run build
+
+      - name: Create release if version is new
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi

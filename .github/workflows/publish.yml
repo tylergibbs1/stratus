@@ -27,12 +27,6 @@ jobs:
           echo "Publishing version $VERSION"
           npm version "$VERSION" --no-git-tag-version
 
-      - name: Typecheck
-        run: bunx tsc -p tsconfig.build.json --noEmit
-
-      - name: Test
-        run: bun test tests/core tests/azure
-
       - name: Build
         run: bun run build
 
