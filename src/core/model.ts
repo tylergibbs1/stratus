@@ -13,6 +13,7 @@ export interface UsageInfo {
 	totalTokens: number;
 	cacheReadTokens?: number;
 	cacheCreationTokens?: number;
+	reasoningTokens?: number;
 }
 
 export interface ModelResponse {

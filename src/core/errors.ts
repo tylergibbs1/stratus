@@ -61,6 +61,18 @@ export class RunAbortedError extends StratusError {
 	}
 }
 
+export class MaxBudgetExceededError extends StratusError {
+	readonly budgetUsd: number;
+	readonly spentUsd: number;
+
+	constructor(budgetUsd: number, spentUsd: number) {
+		super(`Agent exceeded maximum budget ($${budgetUsd.toFixed(4)}, spent $${spentUsd.toFixed(4)})`);
+		this.name = "MaxBudgetExceededError";
+		this.budgetUsd = budgetUsd;
+		this.spentUsd = spentUsd;
+	}
+}
+
 export class OutputGuardrailTripwireTriggered extends StratusError {
 	readonly guardrailName: string;
 	readonly outputInfo?: unknown;

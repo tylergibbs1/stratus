@@ -3,6 +3,7 @@ export type { AgentConfig, HandoffInput, Instructions } from "./agent";
 
 export { RunContext } from "./context";
 export { RunResult } from "./result";
+export type { RunResultOptions } from "./result";
 export { run, stream } from "./run";
 export type { RunOptions, StreamOptions, StreamedRunResult } from "./run";
 
@@ -21,10 +22,22 @@ export type { Handoff, HandoffConfig } from "./handoff";
 export { runInputGuardrails, runOutputGuardrails } from "./guardrails";
 export type { GuardrailResult, InputGuardrail, OutputGuardrail } from "./guardrails";
 
-export type { AgentHooks, ToolCallDecision, HandoffDecision } from "./hooks";
+export type {
+	AgentHooks,
+	ToolCallDecision,
+	HandoffDecision,
+	ToolMatcher,
+	MatchedToolCallHook,
+	MatchedAfterToolCallHook,
+	BeforeToolCallHook,
+	AfterToolCallHook,
+} from "./hooks";
 
 export { TraceContext, getCurrentTrace, withTrace } from "./tracing";
 export type { Span, Trace } from "./tracing";
+
+export { createCostEstimator } from "./cost";
+export type { CostEstimator, PricingConfig } from "./cost";
 
 export type {
 	Model,
@@ -38,12 +51,14 @@ export type {
 export type {
 	ChatMessage,
 	SystemMessage,
+	DeveloperMessage,
 	UserMessage,
 	AssistantMessage,
 	ToolMessage,
 	ToolCall,
 	ToolDefinition,
 	ModelSettings,
+	ReasoningEffort,
 	ResponseFormat,
 	ToolChoice,
 	ToolUseBehavior,
@@ -55,6 +70,7 @@ export type {
 export {
 	StratusError,
 	MaxTurnsExceededError,
+	MaxBudgetExceededError,
 	ModelError,
 	ContentFilterError,
 	OutputParseError,

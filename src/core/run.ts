@@ -1,15 +1,31 @@
 import type { Agent } from "./agent";
 import { RunContext } from "./context";
-import { MaxTurnsExceededError, OutputParseError, RunAbortedError, StratusError } from "./errors";
+import type { CostEstimator } from "./cost";
+import {
+	MaxBudgetExceededError,
+	MaxTurnsExceededError,
+	OutputParseError,
+	RunAbortedError,
+	StratusError,
+} from "./errors";
 import { runInputGuardrails, runOutputGuardrails } from "./guardrails";
-import type { HandoffDecision, ToolCallDecision } from "./hooks";
+import type {
+	AfterToolCallHook,
+	BeforeToolCallHook,
+	HandoffDecision,
+	MatchedAfterToolCallHook,
+	MatchedToolCallHook,
+	ToolCallDecision,
+	ToolMatcher,
+} from "./hooks";
 import { handoffToDefinition } from "./handoff";
-import type { Model, ModelRequest, ModelResponse, StreamEvent } from "./model";
+import type { Model, ModelRequest, ModelResponse, StreamEvent, UsageInfo } from "./model";
 import { subagentToDefinition, subagentToTool } from "./subagent";
+import type { SubAgent } from "./subagent";
 import { RunResult } from "./result";
 import { toolToDefinition } from "./tool";
 import { getCurrentTrace } from "./tracing";
-import type { AssistantMessage, ChatMessage, ToolDefinition, ToolMessage } from "./types";
+import type { AssistantMessage, ChatMessage, ToolCall, ToolDefinition, ToolMessage } from "./types";
 
 const DEFAULT_MAX_TURNS = 10;
 
@@ -36,11 +52,73 @@ function extractHandoffDecision(
 	return undefined;
 }
 
+function matchesToolName(matcher: ToolMatcher, name: string): boolean {
+	if (typeof matcher === "string") return matcher === name;
+	return matcher.test(name);
+}
+
+function matchesAny(matchers: ToolMatcher | ToolMatcher[], name: string): boolean {
+	if (Array.isArray(matchers)) {
+		return matchers.some((m) => matchesToolName(m, name));
+	}
+	return matchesToolName(matchers, name);
+}
+
+async function resolveBeforeToolCallHook<TContext>(
+	hook: BeforeToolCallHook<TContext> | undefined,
+	params: { agent: Agent<TContext, any>; toolCall: ToolCall; context: TContext },
+): Promise<ToolCallDecision | undefined> {
+	if (!hook) return undefined;
+
+	// Function form (backward compat)
+	if (typeof hook === "function") {
+		return extractToolCallDecision(await hook(params));
+	}
+
+	// Matched array form
+	for (const entry of hook as MatchedToolCallHook<TContext>[]) {
+		if (matchesAny(entry.match, params.toolCall.function.name)) {
+			const decision = extractToolCallDecision(await entry.hook(params));
+			if (decision?.decision === "deny") return decision;
+			if (decision?.decision === "modify") return decision;
+		}
+	}
+
+	return undefined;
+}
+
+async function resolveAfterToolCallHook<TContext>(
+	hook: AfterToolCallHook<TContext> | undefined,
+	params: {
+		agent: Agent<TContext, any>;
+		toolCall: ToolCall;
+		result: string;
+		context: TContext;
+	},
+): Promise<void> {
+	if (!hook) return;
+
+	// Function form (backward compat)
+	if (typeof hook === "function") {
+		await hook(params);
+		return;
+	}
+
+	// Matched array form
+	for (const entry of hook as MatchedAfterToolCallHook<TContext>[]) {
+		if (matchesAny(entry.match, params.toolCall.function.name)) {
+			await entry.hook(params);
+		}
+	}
+}
+
 export interface RunOptions<TContext> {
 	context?: TContext;
 	model?: Model;
 	maxTurns?: number;
 	signal?: AbortSignal;
+	costEstimator?: CostEstimator;
+	maxBudgetUsd?: number;
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -49,11 +127,35 @@ function checkAborted(signal?: AbortSignal): void {
 	}
 }
 
+function validateBudgetOptions(options?: RunOptions<any>): void {
+	if (options?.maxBudgetUsd !== undefined && !options.costEstimator) {
+		throw new StratusError("maxBudgetUsd requires a costEstimator to be provided");
+	}
+}
+
+function applyTurnCost(
+	ctx: RunContext<any>,
+	usage: UsageInfo | undefined,
+	costEstimator?: CostEstimator,
+): void {
+	if (costEstimator && usage) {
+		ctx.totalCostUsd += costEstimator(usage);
+	}
+}
+
+function checkBudget(ctx: RunContext<any>, maxBudgetUsd: number | undefined): void {
+	if (maxBudgetUsd !== undefined && ctx.totalCostUsd > maxBudgetUsd) {
+		throw new MaxBudgetExceededError(maxBudgetUsd, ctx.totalCostUsd);
+	}
+}
+
 export async function run<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
 	options?: RunOptions<TContext>,
 ): Promise<RunResult<TOutput>> {
+	validateBudgetOptions(options);
+
 	const model = options?.model ?? agent.model;
 	if (!model) {
 		throw new StratusError("No model provided. Pass a model to the agent or to run().");
@@ -63,6 +165,8 @@ export async function run<TContext, TOutput = undefined>(
 	checkAborted(signal);
 
 	const maxTurns = options?.maxTurns ?? DEFAULT_MAX_TURNS;
+	const costEstimator = options?.costEstimator;
+	const maxBudgetUsd = options?.maxBudgetUsd;
 	const ctx = new RunContext(options?.context as TContext);
 	const trace = getCurrentTrace();
 
@@ -137,6 +241,23 @@ export async function run<TContext, TOutput = undefined>(
 		checkAborted(signal);
 		lastFinishReason = response.finishReason;
 		ctx.addUsage(response.usage);
+		ctx.numTurns++;
+
+		applyTurnCost(ctx, response.usage, costEstimator);
+
+		// Check budget after each model call
+		try {
+			checkBudget(ctx, maxBudgetUsd);
+		} catch (error) {
+			if (error instanceof MaxBudgetExceededError && currentAgent.hooks.onStop) {
+				await currentAgent.hooks.onStop({
+					agent: currentAgent,
+					context: ctx.context,
+					reason: "max_budget",
+				});
+			}
+			throw error;
+		}
 
 		const assistantMsg: AssistantMessage = {
 			role: "assistant",
@@ -161,14 +282,15 @@ export async function run<TContext, TOutput = undefined>(
 		// Check toolUseBehavior — should we stop instead of calling the LLM again?
 		if (shouldStopAfterToolCalls(currentAgent, response.toolCalls)) {
 			const toolOutput = toolMessages.map((m) => m.content).join("\n");
-			return new RunResult<TOutput>(
-				toolOutput,
+			return new RunResult<TOutput>({
+				output: toolOutput,
 				messages,
-				ctx.usage,
-				currentAgent,
-				undefined,
-				lastFinishReason,
-			);
+				usage: ctx.usage,
+				lastAgent: currentAgent,
+				finishReason: lastFinishReason,
+				numTurns: ctx.numTurns,
+				totalCostUsd: ctx.totalCostUsd,
+			});
 		}
 
 		if (handoffAgent) {
@@ -226,6 +348,15 @@ export async function run<TContext, TOutput = undefined>(
 		}
 	}
 
+	// Fire onStop before throwing MaxTurnsExceededError
+	if (currentAgent.hooks.onStop) {
+		await currentAgent.hooks.onStop({
+			agent: currentAgent,
+			context: ctx.context,
+			reason: "max_turns",
+		});
+	}
+
 	throw new MaxTurnsExceededError(maxTurns);
 }
 
@@ -261,6 +392,8 @@ async function* streamInternal<TContext, TOutput = undefined>(
 	rejectResult: (error: unknown) => void,
 ): AsyncGenerator<StreamEvent> {
 	try {
+		validateBudgetOptions(options);
+
 		const model = options?.model ?? agent.model;
 		if (!model) {
 			throw new StratusError("No model provided. Pass a model to the agent or to run().");
@@ -270,6 +403,8 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		checkAborted(signal);
 
 		const maxTurns = options?.maxTurns ?? DEFAULT_MAX_TURNS;
+		const costEstimator = options?.costEstimator;
+		const maxBudgetUsd = options?.maxBudgetUsd;
 		const ctx = new RunContext(options?.context as TContext);
 		const trace = getCurrentTrace();
 
@@ -339,6 +474,23 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			checkAborted(signal);
 			lastFinishReason = finalResponse!.finishReason;
 			ctx.addUsage(finalResponse!.usage);
+			ctx.numTurns++;
+
+			applyTurnCost(ctx, finalResponse!.usage, costEstimator);
+
+			// Check budget after each model call
+			try {
+				checkBudget(ctx, maxBudgetUsd);
+			} catch (error) {
+				if (error instanceof MaxBudgetExceededError && currentAgent.hooks.onStop) {
+					await currentAgent.hooks.onStop({
+						agent: currentAgent,
+						context: ctx.context,
+						reason: "max_budget",
+					});
+				}
+				throw error;
+			}
 
 			const assistantMsg: AssistantMessage = {
 				role: "assistant",
@@ -375,14 +527,15 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			if (shouldStopAfterToolCalls(currentAgent, finalResponse!.toolCalls)) {
 				const toolOutput = toolMessages.map((m) => m.content).join("\n");
 				resolveResult(
-					new RunResult<TOutput>(
-						toolOutput,
+					new RunResult<TOutput>({
+						output: toolOutput,
 						messages,
-						ctx.usage,
-						currentAgent,
-						undefined,
-						lastFinishReason,
-					),
+						usage: ctx.usage,
+						lastAgent: currentAgent,
+						finishReason: lastFinishReason,
+						numTurns: ctx.numTurns,
+						totalCostUsd: ctx.totalCostUsd,
+					}),
 				);
 				return;
 			}
@@ -428,6 +581,15 @@ async function* streamInternal<TContext, TOutput = undefined>(
 					}
 				}
 			}
+		}
+
+		// Fire onStop before throwing MaxTurnsExceededError
+		if (currentAgent.hooks.onStop) {
+			await currentAgent.hooks.onStop({
+				agent: currentAgent,
+				context: ctx.context,
+				reason: "max_turns",
+			});
 		}
 
 		throw new MaxTurnsExceededError(maxTurns);
@@ -481,14 +643,16 @@ async function buildFinalResult<TContext, TOutput>(
 		}
 	}
 
-	const result = new RunResult<TOutput>(
-		rawOutput,
+	const result = new RunResult<TOutput>({
+		output: rawOutput,
 		messages,
-		ctx.usage,
-		currentAgent,
+		usage: ctx.usage,
+		lastAgent: currentAgent,
 		finalOutput,
 		finishReason,
-	);
+		numTurns: ctx.numTurns,
+		totalCostUsd: ctx.totalCostUsd,
+	});
 
 	// Fire afterRun hook on the entry agent
 	if (entryAgent.hooks.afterRun) {
@@ -579,23 +743,29 @@ async function executeToolCallsWithHandoffs<TContext>(
 				const saTool = subagentToTool(matchedSubagent);
 				try {
 					const params = JSON.parse(tc.function.arguments);
+					const fullToolCall: ToolCall = { id: tc.id, type: "function", function: tc.function };
 
-					if (agent.hooks.beforeToolCall) {
-						const decision = extractToolCallDecision(
-							await agent.hooks.beforeToolCall({
-								agent,
-								toolCall: { id: tc.id, type: "function", function: tc.function },
-								context: ctx.context,
-							}),
-						);
+					const decision = await resolveBeforeToolCallHook(agent.hooks.beforeToolCall, {
+						agent,
+						toolCall: fullToolCall,
+						context: ctx.context,
+					});
 
-						if (decision?.decision === "deny") {
-							return {
-								role: "tool" as const,
-								tool_call_id: tc.id,
-								content: decision.reason ?? `Tool call "${tcName}" was denied`,
-							};
-						}
+					if (decision?.decision === "deny") {
+						return {
+							role: "tool" as const,
+							tool_call_id: tc.id,
+							content: decision.reason ?? `Tool call "${tcName}" was denied`,
+						};
+					}
+
+					// Fire onSubagentStart
+					if (agent.hooks.onSubagentStart) {
+						await agent.hooks.onSubagentStart({
+							agent,
+							subagent: matchedSubagent as SubAgent,
+							context: ctx.context,
+						});
 					}
 
 					let result: string;
@@ -614,14 +784,22 @@ async function executeToolCallsWithHandoffs<TContext>(
 						result = await saTool.execute(ctx.context, params, { signal });
 					}
 
-					if (agent.hooks.afterToolCall) {
-						await agent.hooks.afterToolCall({
+					// Fire onSubagentStop
+					if (agent.hooks.onSubagentStop) {
+						await agent.hooks.onSubagentStop({
 							agent,
-							toolCall: { id: tc.id, type: "function", function: tc.function },
+							subagent: matchedSubagent as SubAgent,
 							result,
 							context: ctx.context,
 						});
 					}
+
+					await resolveAfterToolCallHook(agent.hooks.afterToolCall, {
+						agent,
+						toolCall: fullToolCall,
+						result,
+						context: ctx.context,
+					});
 
 					return {
 						role: "tool" as const,
@@ -649,27 +827,24 @@ async function executeToolCallsWithHandoffs<TContext>(
 
 			try {
 				let params = JSON.parse(tc.function.arguments);
+				const fullToolCall: ToolCall = { id: tc.id, type: "function", function: tc.function };
 
 				// Fire beforeToolCall hook
-				if (agent.hooks.beforeToolCall) {
-					const decision = extractToolCallDecision(
-						await agent.hooks.beforeToolCall({
-							agent,
-							toolCall: { id: tc.id, type: "function", function: tc.function },
-							context: ctx.context,
-						}),
-					);
+				const decision = await resolveBeforeToolCallHook(agent.hooks.beforeToolCall, {
+					agent,
+					toolCall: fullToolCall,
+					context: ctx.context,
+				});
 
-					if (decision?.decision === "deny") {
-						return {
-							role: "tool" as const,
-							tool_call_id: tc.id,
-							content: decision.reason ?? `Tool call "${tcName}" was denied`,
-						};
-					}
-					if (decision?.decision === "modify") {
-						params = decision.modifiedParams;
-					}
+				if (decision?.decision === "deny") {
+					return {
+						role: "tool" as const,
+						tool_call_id: tc.id,
+						content: decision.reason ?? `Tool call "${tcName}" was denied`,
+					};
+				}
+				if (decision?.decision === "modify") {
+					params = decision.modifiedParams;
 				}
 
 				checkAborted(signal);
@@ -688,14 +863,12 @@ async function executeToolCallsWithHandoffs<TContext>(
 				}
 
 				// Fire afterToolCall hook
-				if (agent.hooks.afterToolCall) {
-					await agent.hooks.afterToolCall({
-						agent,
-						toolCall: { id: tc.id, type: "function", function: tc.function },
-						result,
-						context: ctx.context,
-					});
-				}
+				await resolveAfterToolCallHook(agent.hooks.afterToolCall, {
+					agent,
+					toolCall: fullToolCall,
+					result,
+					context: ctx.context,
+				});
 
 				return {
 					role: "tool" as const,

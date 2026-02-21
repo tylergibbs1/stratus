@@ -8,6 +8,7 @@ import type {
 	UsageInfo,
 } from "../core/model";
 import type { ChatMessage, ToolCall } from "../core/types";
+import { resolveChatCompletionsUrl } from "./endpoint";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureChatCompletionsModelConfig {
@@ -20,20 +21,16 @@ export interface AzureChatCompletionsModelConfig {
 const DEFAULT_API_VERSION = "2025-03-01-preview";
 
 export class AzureChatCompletionsModel implements Model {
-	private readonly endpoint: string;
+	private readonly url: string;
 	private readonly apiKey: string;
-	private readonly deployment: string;
-	private readonly apiVersion: string;
 
 	constructor(config: AzureChatCompletionsModelConfig) {
-		this.endpoint = config.endpoint.replace(/\/$/, "");
 		this.apiKey = config.apiKey;
-		this.deployment = config.deployment;
-		this.apiVersion = config.apiVersion ?? DEFAULT_API_VERSION;
-	}
-
-	private get url(): string {
-		return `${this.endpoint}/openai/deployments/${this.deployment}/chat/completions?api-version=${this.apiVersion}`;
+		this.url = resolveChatCompletionsUrl(
+			config.endpoint,
+			config.deployment,
+			config.apiVersion ?? DEFAULT_API_VERSION,
+		);
 	}
 
 	async getResponse(
@@ -77,6 +74,9 @@ export class AzureChatCompletionsModel implements Model {
 					totalTokens: chunk.usage.total_tokens,
 					...(chunk.usage.prompt_tokens_details?.cached_tokens !== undefined
 						? { cacheReadTokens: chunk.usage.prompt_tokens_details.cached_tokens }
+						: {}),
+					...(chunk.usage.completion_tokens_details?.reasoning_tokens !== undefined
+						? { reasoningTokens: chunk.usage.completion_tokens_details.reasoning_tokens }
 						: {}),
 				};
 			}
@@ -169,12 +169,16 @@ export class AzureChatCompletionsModel implements Model {
 			if (s.temperature !== undefined) body.temperature = s.temperature;
 			if (s.topP !== undefined) body.top_p = s.topP;
 			if (s.maxTokens !== undefined) body.max_tokens = s.maxTokens;
+			if (s.maxCompletionTokens !== undefined)
+				body.max_completion_tokens = s.maxCompletionTokens;
 			if (s.stop !== undefined) body.stop = s.stop;
 			if (s.presencePenalty !== undefined) body.presence_penalty = s.presencePenalty;
 			if (s.frequencyPenalty !== undefined) body.frequency_penalty = s.frequencyPenalty;
 			if (s.toolChoice !== undefined) body.tool_choice = s.toolChoice;
 			if (s.parallelToolCalls !== undefined) body.parallel_tool_calls = s.parallelToolCalls;
 			if (s.seed !== undefined) body.seed = s.seed;
+			if (s.reasoningEffort !== undefined) body.reasoning_effort = s.reasoningEffort;
+			if (s.promptCacheKey !== undefined) body.prompt_cache_key = s.promptCacheKey;
 		}
 
 		return body;
@@ -270,6 +274,9 @@ export class AzureChatCompletionsModel implements Model {
 					...(json.usage.prompt_tokens_details?.cached_tokens !== undefined
 						? { cacheReadTokens: json.usage.prompt_tokens_details.cached_tokens }
 						: {}),
+					...(json.usage.completion_tokens_details?.reasoning_tokens !== undefined
+						? { reasoningTokens: json.usage.completion_tokens_details.reasoning_tokens }
+						: {}),
 				}
 			: undefined;
 
@@ -286,6 +293,8 @@ function serializeMessage(msg: ChatMessage): Record<string, unknown> {
 	switch (msg.role) {
 		case "system":
 			return { role: "system", content: msg.content };
+		case "developer":
+			return { role: "developer", content: msg.content };
 		case "user":
 			return { role: "user", content: msg.content };
 		case "assistant": {
@@ -320,6 +329,9 @@ interface AzureChatResponse {
 		prompt_tokens_details?: {
 			cached_tokens?: number;
 		};
+		completion_tokens_details?: {
+			reasoning_tokens?: number;
+		};
 	};
 }
 
@@ -353,6 +365,9 @@ interface AzureStreamChunk {
 		total_tokens: number;
 		prompt_tokens_details?: {
 			cached_tokens?: number;
+		};
+		completion_tokens_details?: {
+			reasoning_tokens?: number;
 		};
 	};
 }

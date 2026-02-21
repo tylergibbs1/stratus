@@ -297,7 +297,7 @@ describe("AzureResponsesModel", () => {
 		const fetchMock = globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } };
 		const [url, options] = fetchMock.mock.calls[0]!;
 
-		expect(url).toBe("https://test.openai.azure.com/openai/responses?api-version=2025-04-01-preview");
+		expect(url).toBe("https://test.openai.azure.com/openai/v1/responses");
 		expect((options.headers as Record<string, string>)["api-key"]).toBe("test-key");
 	});
 

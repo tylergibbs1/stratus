@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { Agent, type HandoffInput, type Instructions } from "./agent";
+import type { CostEstimator } from "./cost";
 import { StratusError } from "./errors";
 import type { InputGuardrail, OutputGuardrail } from "./guardrails";
 import type { AgentHooks } from "./hooks";
@@ -24,6 +25,8 @@ export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	toolUseBehavior?: ToolUseBehavior;
 	context?: TContext;
 	maxTurns?: number;
+	costEstimator?: CostEstimator;
+	maxBudgetUsd?: number;
 }
 
 export interface SessionSnapshot {
@@ -37,10 +40,14 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _agent: Agent<TContext, TOutput>;
 	private readonly _context: TContext | undefined;
 	private readonly _maxTurns: number | undefined;
+	private readonly _costEstimator: CostEstimator | undefined;
+	private readonly _maxBudgetUsd: number | undefined;
+	private readonly _hooks: AgentHooks<TContext> | undefined;
 	private _messages: ChatMessage[] = [];
 	private _resultPromise: Promise<RunResult<TOutput>> | null = null;
 	private _streaming = false;
 	private _closed = false;
+	private _started = false;
 
 	constructor(
 		config: SessionConfig<TContext, TOutput>,
@@ -49,6 +56,9 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this.id = restore?.id ?? crypto.randomUUID();
 		this._context = config.context;
 		this._maxTurns = config.maxTurns;
+		this._costEstimator = config.costEstimator;
+		this._maxBudgetUsd = config.maxBudgetUsd;
+		this._hooks = config.hooks;
 		this._agent = new Agent<TContext, TOutput>({
 			name: "session_agent",
 			model: config.model,
@@ -115,6 +125,15 @@ export class Session<TContext = unknown, TOutput = undefined> {
 
 	private async *_streamInternal(signal?: AbortSignal): AsyncGenerator<StreamEvent> {
 		this._streaming = true;
+
+		// Fire onSessionStart on first stream
+		if (!this._started && this._hooks?.onSessionStart) {
+			this._started = true;
+			await this._hooks.onSessionStart({ context: this._context as TContext });
+		} else {
+			this._started = true;
+		}
+
 		try {
 			const { stream: s, result: resultPromise } = coreStream(
 				this._agent,
@@ -123,6 +142,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 					context: this._context,
 					maxTurns: this._maxTurns,
 					signal,
+					costEstimator: this._costEstimator,
+					maxBudgetUsd: this._maxBudgetUsd,
 				},
 			);
 
@@ -140,6 +161,11 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			await this._resultPromise;
 		} finally {
 			this._streaming = false;
+
+			// Fire onSessionEnd in finally
+			if (this._hooks?.onSessionEnd) {
+				await this._hooks.onSessionEnd({ context: this._context as TContext });
+			}
 		}
 	}
 }

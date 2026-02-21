@@ -14,6 +14,7 @@ import type {
 	ToolCall,
 	ToolDefinition,
 } from "../core/types";
+import { resolveResponsesUrl } from "./endpoint";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureResponsesModelConfig {
@@ -26,20 +27,17 @@ export interface AzureResponsesModelConfig {
 const DEFAULT_API_VERSION = "2025-04-01-preview";
 
 export class AzureResponsesModel implements Model {
-	private readonly endpoint: string;
+	private readonly url: string;
 	private readonly apiKey: string;
 	private readonly deployment: string;
-	private readonly apiVersion: string;
 
 	constructor(config: AzureResponsesModelConfig) {
-		this.endpoint = config.endpoint.replace(/\/$/, "");
 		this.apiKey = config.apiKey;
 		this.deployment = config.deployment;
-		this.apiVersion = config.apiVersion ?? DEFAULT_API_VERSION;
-	}
-
-	private get url(): string {
-		return `${this.endpoint}/openai/responses?api-version=${this.apiVersion}`;
+		this.url = resolveResponsesUrl(
+			config.endpoint,
+			config.apiVersion ?? DEFAULT_API_VERSION,
+		);
 	}
 
 	async getResponse(
@@ -130,6 +128,12 @@ export class AzureResponsesModel implements Model {
 							promptTokens: resp.usage.input_tokens,
 							completionTokens: resp.usage.output_tokens,
 							totalTokens: resp.usage.total_tokens,
+							...(resp.usage.input_tokens_details?.cached_tokens !== undefined
+								? { cacheReadTokens: resp.usage.input_tokens_details.cached_tokens }
+								: {}),
+							...(resp.usage.output_tokens_details?.reasoning_tokens !== undefined
+								? { reasoningTokens: resp.usage.output_tokens_details.reasoning_tokens }
+								: {}),
 						};
 					}
 					finishReason = mapStatus(resp?.status);
@@ -189,8 +193,14 @@ export class AzureResponsesModel implements Model {
 			if (s.temperature !== undefined) body.temperature = s.temperature;
 			if (s.topP !== undefined) body.top_p = s.topP;
 			if (s.maxTokens !== undefined) body.max_output_tokens = s.maxTokens;
+			if (s.maxCompletionTokens !== undefined)
+				body.max_output_tokens = s.maxCompletionTokens;
 			if (s.toolChoice !== undefined) body.tool_choice = s.toolChoice;
 			if (s.parallelToolCalls !== undefined) body.parallel_tool_calls = s.parallelToolCalls;
+			if (s.reasoningEffort !== undefined)
+				body.reasoning = { effort: s.reasoningEffort };
+			if (s.promptCacheKey !== undefined)
+				body.prompt_cache_key = s.promptCacheKey;
 		}
 
 		return body;
@@ -264,13 +274,7 @@ export class AzureResponsesModel implements Model {
 			return {
 				content: extractTextContent(json.output ?? []),
 				toolCalls,
-				usage: json.usage
-					? {
-							promptTokens: json.usage.input_tokens,
-							completionTokens: json.usage.output_tokens,
-							totalTokens: json.usage.total_tokens,
-						}
-					: undefined,
+				usage: json.usage ? parseResponsesUsage(json.usage) : undefined,
 				finishReason: "length",
 			};
 		}
@@ -280,11 +284,7 @@ export class AzureResponsesModel implements Model {
 		const content = extractTextContent(output);
 
 		const usage: UsageInfo | undefined = json.usage
-			? {
-					promptTokens: json.usage.input_tokens,
-					completionTokens: json.usage.output_tokens,
-					totalTokens: json.usage.total_tokens,
-				}
+			? parseResponsesUsage(json.usage)
 			: undefined;
 
 		const finishReason = toolCalls.length > 0 ? "tool_calls" : "stop";
@@ -296,6 +296,20 @@ export class AzureResponsesModel implements Model {
 			finishReason,
 		};
 	}
+}
+
+function parseResponsesUsage(usage: NonNullable<ResponsesApiResponse["usage"]>): UsageInfo {
+	return {
+		promptTokens: usage.input_tokens,
+		completionTokens: usage.output_tokens,
+		totalTokens: usage.total_tokens,
+		...(usage.input_tokens_details?.cached_tokens !== undefined
+			? { cacheReadTokens: usage.input_tokens_details.cached_tokens }
+			: {}),
+		...(usage.output_tokens_details?.reasoning_tokens !== undefined
+			? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
+			: {}),
+	};
 }
 
 function extractTextContent(output: ResponsesOutputItem[]): string | null {
@@ -339,6 +353,9 @@ function convertMessages(messages: ChatMessage[]): {
 	for (const msg of messages) {
 		switch (msg.role) {
 			case "system":
+				instructions = msg.content;
+				break;
+			case "developer":
 				instructions = msg.content;
 				break;
 			case "user":
@@ -447,6 +464,12 @@ interface ResponsesApiResponse {
 		input_tokens: number;
 		output_tokens: number;
 		total_tokens: number;
+		input_tokens_details?: {
+			cached_tokens?: number;
+		};
+		output_tokens_details?: {
+			reasoning_tokens?: number;
+		};
 	};
 }
 
@@ -486,6 +509,12 @@ interface ResponsesStreamEvent {
 			input_tokens: number;
 			output_tokens: number;
 			total_tokens: number;
+			input_tokens_details?: {
+				cached_tokens?: number;
+			};
+			output_tokens_details?: {
+				reasoning_tokens?: number;
+			};
 		};
 	};
 }

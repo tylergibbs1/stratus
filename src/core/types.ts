@@ -32,7 +32,12 @@ export interface ToolMessage {
 	content: string;
 }
 
-export type ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage;
+export interface DeveloperMessage {
+	role: "developer";
+	content: string;
+}
+
+export type ChatMessage = SystemMessage | DeveloperMessage | UserMessage | AssistantMessage | ToolMessage;
 
 export interface ToolCall {
 	id: string;
@@ -54,16 +59,21 @@ export type ToolUseBehavior =
 	| "stop_on_first_tool"
 	| { stopAtToolNames: string[] };
 
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
 export interface ModelSettings {
 	temperature?: number;
 	topP?: number;
 	maxTokens?: number;
+	maxCompletionTokens?: number;
 	stop?: string[];
 	presencePenalty?: number;
 	frequencyPenalty?: number;
 	toolChoice?: ToolChoice;
 	parallelToolCalls?: boolean;
 	seed?: number;
+	reasoningEffort?: ReasoningEffort;
+	promptCacheKey?: string;
 }
 
 export type ResponseFormat =

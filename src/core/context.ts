@@ -3,6 +3,8 @@ import type { UsageInfo } from "./model";
 export class RunContext<TContext> {
 	readonly context: TContext;
 	readonly usage: UsageInfo;
+	numTurns = 0;
+	totalCostUsd = 0;
 
 	constructor(context: TContext) {
 		this.context = context;
@@ -24,6 +26,9 @@ export class RunContext<TContext> {
 		}
 		if (usage.cacheCreationTokens !== undefined) {
 			u.cacheCreationTokens = (u.cacheCreationTokens ?? 0) + usage.cacheCreationTokens;
+		}
+		if (usage.reasoningTokens !== undefined) {
+			u.reasoningTokens = (u.reasoningTokens ?? 0) + usage.reasoningTokens;
 		}
 	}
 }
