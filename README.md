@@ -12,7 +12,7 @@
 
 A TypeScript agent framework for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
 
-`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals`
+`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `todo tracking` `cost tracking`
 
 ## Install
 
@@ -329,6 +329,55 @@ try {
     console.log("Run was cancelled");
   }
 }
+```
+
+### Todo Tracking
+
+Track task progress during agent execution:
+
+```ts
+import { todoTool, TodoList } from "stratus-sdk";
+
+const todos = new TodoList();
+todos.onUpdate((items) => {
+  for (const item of items) {
+    const icon = item.status === "completed" ? "+" : item.status === "in_progress" ? ">" : "-";
+    console.log(`${icon} ${item.content}`);
+  }
+});
+
+const agent = new Agent({
+  name: "planner",
+  instructions: "Break tasks into steps and track progress with todo_write.",
+  model,
+  tools: [todoTool(todos)],
+});
+
+await run(agent, "Set up a new TypeScript project");
+```
+
+### Usage & Cost Tracking
+
+Track token usage and estimate costs:
+
+```ts
+import { createCostEstimator } from "stratus-sdk";
+
+const estimator = createCostEstimator({
+  inputTokenCostPer1k: 0.01,
+  outputTokenCostPer1k: 0.03,
+});
+
+const result = await run(agent, "Hello", { costEstimator: estimator });
+console.log(result.usage.totalTokens); // token counts
+console.log(result.totalCostUsd);      // estimated cost
+console.log(result.numTurns);          // model call count
+
+// Set budget limits
+const result = await run(agent, "Hello", {
+  costEstimator: estimator,
+  maxBudgetUsd: 0.50, // throws MaxBudgetExceededError if exceeded
+});
 ```
 
 ### Tool Choice & Tool Use Behavior
