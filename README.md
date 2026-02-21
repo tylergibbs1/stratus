@@ -1,5 +1,9 @@
 <p align="center">
-  <img src=".github/logo.svg" alt="Stratus" width="80" height="80">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github/logo.svg">
+    <img src=".github/logo.svg" alt="Stratus" width="80" height="80">
+  </picture>
 </p>
 
 # Stratus
