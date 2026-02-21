@@ -1,5 +1,5 @@
 import type { Agent } from "./agent";
-import type { UsageInfo } from "./model";
+import type { FinishReason, UsageInfo } from "./model";
 import type { ChatMessage } from "./types";
 
 export interface RunResultOptions<TOutput = undefined> {
@@ -8,7 +8,7 @@ export interface RunResultOptions<TOutput = undefined> {
 	usage: UsageInfo;
 	lastAgent: Agent<any, any>;
 	finalOutput?: TOutput;
-	finishReason?: string;
+	finishReason?: FinishReason;
 	numTurns?: number;
 	totalCostUsd?: number;
 }
@@ -19,7 +19,7 @@ export class RunResult<TOutput = undefined> {
 	readonly messages: ChatMessage[];
 	readonly usage: UsageInfo;
 	readonly lastAgent: Agent<any, any>;
-	readonly finishReason?: string;
+	readonly finishReason?: FinishReason;
 	readonly numTurns: number;
 	readonly totalCostUsd: number;
 

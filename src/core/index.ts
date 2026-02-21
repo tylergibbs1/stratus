@@ -13,6 +13,9 @@ export type { SessionConfig, SessionSnapshot } from "./session";
 export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";
 
+export { TodoList, todoTool } from "./todo";
+export type { Todo, TodoStatus, TodoUpdateListener } from "./todo";
+
 export { subagent, subagentToDefinition, subagentToTool } from "./subagent";
 export type { SubAgent, SubAgentConfig } from "./subagent";
 
@@ -40,6 +43,7 @@ export { createCostEstimator } from "./cost";
 export type { CostEstimator, PricingConfig } from "./cost";
 
 export type {
+	FinishReason,
 	Model,
 	ModelRequest,
 	ModelRequestOptions,

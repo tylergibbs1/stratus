@@ -16,11 +16,13 @@ export interface UsageInfo {
 	reasoningTokens?: number;
 }
 
+export type FinishReason = "stop" | "length" | "tool_calls" | "content_filter";
+
 export interface ModelResponse {
 	content: string | null;
 	toolCalls: ToolCall[];
 	usage?: UsageInfo;
-	finishReason?: string;
+	finishReason?: FinishReason;
 }
 
 export type StreamEvent =

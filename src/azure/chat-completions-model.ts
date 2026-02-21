@@ -1,5 +1,6 @@
 import { ContentFilterError, ModelError } from "../core/errors";
 import type {
+	FinishReason,
 	Model,
 	ModelRequest,
 	ModelRequestOptions,
@@ -58,7 +59,7 @@ export class AzureChatCompletionsModel implements Model {
 
 		let content = "";
 		const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
-		let finishReason: string | undefined;
+		let finishReason: FinishReason | undefined;
 		let usage: UsageInfo | undefined;
 
 		for await (const data of parseSSE(response.body)) {
@@ -87,7 +88,7 @@ export class AzureChatCompletionsModel implements Model {
 			if (!choice) continue;
 
 			if (choice.finish_reason) {
-				finishReason = choice.finish_reason;
+				finishReason = choice.finish_reason as FinishReason;
 			}
 
 			const delta = choice.delta;
@@ -287,7 +288,7 @@ export class AzureChatCompletionsModel implements Model {
 			content: choice.message.content,
 			toolCalls,
 			usage,
-			finishReason: choice.finish_reason,
+			finishReason: choice.finish_reason as FinishReason,
 		};
 	}
 }

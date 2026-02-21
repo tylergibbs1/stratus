@@ -6,3 +6,4 @@ dist/
 *.log
 .breadcrumbs.json
 examples/test-models.json
+examples/test-todo.ts

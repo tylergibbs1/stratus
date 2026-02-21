@@ -19,7 +19,7 @@ import type {
 	ToolMatcher,
 } from "./hooks";
 import { handoffToDefinition } from "./handoff";
-import type { Model, ModelRequest, ModelResponse, StreamEvent, UsageInfo } from "./model";
+import type { FinishReason, Model, ModelRequest, ModelResponse, StreamEvent, UsageInfo } from "./model";
 import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { SubAgent } from "./subagent";
 import { RunResult } from "./result";
@@ -205,7 +205,7 @@ export async function run<TContext, TOutput = undefined>(
 		messages.push(...input);
 	}
 
-	let lastFinishReason: string | undefined;
+	let lastFinishReason: FinishReason | undefined;
 
 	for (let turn = 0; turn < maxTurns; turn++) {
 		checkAborted(signal);
@@ -443,7 +443,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			messages.push(...input);
 		}
 
-		let lastFinishReason: string | undefined;
+		let lastFinishReason: FinishReason | undefined;
 
 		for (let turn = 0; turn < maxTurns; turn++) {
 			checkAborted(signal);
@@ -605,7 +605,7 @@ async function buildFinalResult<TContext, TOutput>(
 	messages: ChatMessage[],
 	ctx: RunContext<TContext>,
 	trace: ReturnType<typeof getCurrentTrace>,
-	finishReason?: string,
+	finishReason?: FinishReason,
 ): Promise<RunResult<TOutput>> {
 	const lastMessage = messages[messages.length - 1];
 	const rawOutput =

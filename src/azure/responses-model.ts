@@ -1,5 +1,6 @@
 import { ContentFilterError, ModelError } from "../core/errors";
 import type {
+	FinishReason,
 	Model,
 	ModelRequest,
 	ModelRequestOptions,
@@ -65,7 +66,7 @@ export class AzureResponsesModel implements Model {
 		// Keyed by item.id (the Responses API item identifier), storing call_id for SDK events
 		const toolCalls = new Map<string, { callId: string; name: string; arguments: string }>();
 		let usage: UsageInfo | undefined;
-		let finishReason: string | undefined;
+		let finishReason: FinishReason | undefined;
 
 		for await (const data of parseSSE(response.body)) {
 			let event: ResponsesStreamEvent;
@@ -287,7 +288,7 @@ export class AzureResponsesModel implements Model {
 			? parseResponsesUsage(json.usage)
 			: undefined;
 
-		const finishReason = toolCalls.length > 0 ? "tool_calls" : "stop";
+		const finishReason: FinishReason = toolCalls.length > 0 ? "tool_calls" : "stop";
 
 		return {
 			content,
@@ -331,10 +332,10 @@ function extractToolCalls(output: ResponsesOutputItem[]): ToolCall[] {
 	for (const item of output) {
 		if (item.type === "function_call") {
 			calls.push({
-				id: item.call_id!,
+				id: item.call_id,
 				type: "function",
 				function: {
-					name: item.name!,
+					name: item.name,
 					arguments: item.arguments ?? "",
 				},
 			});
@@ -450,7 +451,7 @@ function convertResponseFormat(
 	return undefined;
 }
 
-function mapStatus(status: string | undefined): string {
+function mapStatus(status: string | undefined): FinishReason {
 	if (status === "incomplete") return "length";
 	return "stop";
 }
@@ -460,26 +461,12 @@ function mapStatus(status: string | undefined): string {
 interface ResponsesApiResponse {
 	status: string;
 	output?: ResponsesOutputItem[];
-	usage?: {
-		input_tokens: number;
-		output_tokens: number;
-		total_tokens: number;
-		input_tokens_details?: {
-			cached_tokens?: number;
-		};
-		output_tokens_details?: {
-			reasoning_tokens?: number;
-		};
-	};
+	usage?: ResponsesUsage;
 }
 
-interface ResponsesOutputItem {
-	type: string;
-	content?: { type: string; text?: string }[];
-	call_id?: string;
-	name?: string;
-	arguments?: string;
-}
+type ResponsesOutputItem =
+	| { type: "message"; content?: { type: string; text?: string }[] }
+	| { type: "function_call"; call_id: string; name: string; arguments?: string };
 
 type ResponsesContentPart =
 	| { type: "input_text"; text: string }
@@ -492,29 +479,29 @@ type ResponsesInputItem =
 	| { type: "function_call"; call_id: string; name: string; arguments: string }
 	| { type: "function_call_output"; call_id: string; output: string };
 
-interface ResponsesStreamEvent {
+interface ResponsesStreamItem {
+	id?: string;
 	type: string;
-	delta?: string;
-	item_id?: string;
-	item?: {
-		id?: string;
-		type: string;
-		call_id?: string;
-		name?: string;
-		arguments?: string;
+	call_id?: string;
+	name?: string;
+	arguments?: string;
+}
+
+interface ResponsesUsage {
+	input_tokens: number;
+	output_tokens: number;
+	total_tokens: number;
+	input_tokens_details?: {
+		cached_tokens?: number;
 	};
-	response?: {
-		status?: string;
-		usage?: {
-			input_tokens: number;
-			output_tokens: number;
-			total_tokens: number;
-			input_tokens_details?: {
-				cached_tokens?: number;
-			};
-			output_tokens_details?: {
-				reasoning_tokens?: number;
-			};
-		};
+	output_tokens_details?: {
+		reasoning_tokens?: number;
 	};
 }
+
+type ResponsesStreamEvent =
+	| { type: "response.output_text.delta"; delta?: string }
+	| { type: "response.output_item.added"; item?: ResponsesStreamItem }
+	| { type: "response.function_call_arguments.delta"; item_id?: string; delta?: string }
+	| { type: "response.output_item.done"; item?: ResponsesStreamItem }
+	| { type: "response.completed"; response?: { status?: string; usage?: ResponsesUsage } };
