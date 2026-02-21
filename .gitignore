@@ -5,3 +5,4 @@ dist/
 .DS_Store
 *.log
 .breadcrumbs.json
+examples/test-models.json
