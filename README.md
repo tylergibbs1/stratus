@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/logo.svg" alt="Stratus" width="80" height="80">
+</p>
+
 # Stratus
 
 A TypeScript agent framework for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
