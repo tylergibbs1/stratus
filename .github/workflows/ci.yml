@@ -48,6 +48,5 @@ jobs:
             gh release create "$TAG" --title "$TAG" --generate-notes
 
             echo "Publishing stratus-sdk@$VERSION to npm"
-            npm version "$VERSION" --no-git-tag-version
             npm publish --access public
           fi
