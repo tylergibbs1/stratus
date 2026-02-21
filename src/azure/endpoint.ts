@@ -19,7 +19,8 @@ export function detectEndpointKind(endpoint: string): AzureEndpointKind {
 	if (
 		path.includes("/openai/deployments/") ||
 		path.includes("/openai/responses") ||
-		path.includes("/openai/v1/")
+		path.includes("/openai/v1/") ||
+		path.includes("/models/")
 	) {
 		return "full_url";
 	}

@@ -23,9 +23,11 @@ const DEFAULT_API_VERSION = "2025-03-01-preview";
 export class AzureChatCompletionsModel implements Model {
 	private readonly url: string;
 	private readonly apiKey: string;
+	private readonly deployment: string;
 
 	constructor(config: AzureChatCompletionsModelConfig) {
 		this.apiKey = config.apiKey;
+		this.deployment = config.deployment;
 		this.url = resolveChatCompletionsUrl(
 			config.endpoint,
 			config.deployment,
@@ -148,6 +150,7 @@ export class AzureChatCompletionsModel implements Model {
 		stream: boolean,
 	): Record<string, unknown> {
 		const body: Record<string, unknown> = {
+			model: this.deployment,
 			messages: request.messages.map(serializeMessage),
 		};
 
