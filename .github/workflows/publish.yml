@@ -1,8 +1,8 @@
 name: Publish to npm
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
 
 jobs:
   publish:
@@ -31,12 +31,6 @@ jobs:
         run: bun run build
 
       - name: Publish
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if npm view stratus-sdk@"$VERSION" version 2>/dev/null; then
-            echo "Version $VERSION already published, skipping"
-          else
-            npm publish --access public
-          fi
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -4,6 +4,8 @@
 
 # Stratus
 
+[usestratus.dev](https://usestratus.dev)
+
 A TypeScript agent framework for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals`
@@ -11,7 +13,7 @@ A TypeScript agent framework for Azure OpenAI. Build multi-agent systems with to
 ## Install
 
 ```bash
-bun add stratus
+bun add stratus-sdk
 ```
 
 Stratus requires [Zod](https://zod.dev) as a peer dependency:
@@ -24,7 +26,7 @@ bun add zod
 
 ```ts
 import { z } from "zod";
-import { Agent, AzureChatCompletionsModel, run, tool } from "stratus";
+import { Agent, AzureChatCompletionsModel, run, tool } from "stratus-sdk";
 
 const model = new AzureChatCompletionsModel({
   endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -140,7 +142,7 @@ console.log(result.finalOutput); // { name: "Marie Curie", age: 66, occupation: 
 Sessions maintain conversation history across multiple interactions:
 
 ```ts
-import { createSession } from "stratus";
+import { createSession } from "stratus-sdk";
 
 const session = createSession({ model, tools: [myTool] });
 
@@ -172,7 +174,7 @@ await using session = createSession({ model });
 Transfer control between specialized agents:
 
 ```ts
-import { handoff } from "stratus";
+import { handoff } from "stratus-sdk";
 
 const orderAgent = new Agent({
   name: "order_specialist",
@@ -204,7 +206,7 @@ console.log(result.lastAgent.name); // "order_specialist"
 Delegate subtasks to child agents that run independently:
 
 ```ts
-import { subagent } from "stratus";
+import { subagent } from "stratus-sdk";
 
 const researcher = new Agent({
   name: "researcher",
@@ -231,7 +233,7 @@ const parentAgent = new Agent({
 Validate inputs and outputs with guardrails:
 
 ```ts
-import type { InputGuardrail, OutputGuardrail } from "stratus";
+import type { InputGuardrail, OutputGuardrail } from "stratus-sdk";
 
 const profanityFilter: InputGuardrail = {
   name: "profanity_filter",
@@ -264,7 +266,7 @@ Guardrails run in parallel. When a tripwire is triggered, an `InputGuardrailTrip
 Lifecycle hooks for observability and control:
 
 ```ts
-import type { AgentHooks } from "stratus";
+import type { AgentHooks } from "stratus-sdk";
 
 const hooks: AgentHooks = {
   beforeRun: ({ agent, input }) => { /* ... */ },
@@ -291,7 +293,7 @@ const hooks: AgentHooks = {
 Opt-in tracing with zero overhead when inactive:
 
 ```ts
-import { withTrace } from "stratus";
+import { withTrace } from "stratus-sdk";
 
 const { result, trace } = await withTrace("my-workflow", () =>
   run(agent, "Hello"),
@@ -349,13 +351,13 @@ Stratus provides three export paths:
 
 ```ts
 // Everything (core + Azure)
-import { Agent, run, tool, AzureChatCompletionsModel, AzureResponsesModel } from "stratus";
+import { Agent, run, tool, AzureChatCompletionsModel, AzureResponsesModel } from "stratus-sdk";
 
 // Core only (provider-agnostic)
-import { Agent, run, tool } from "stratus/core";
+import { Agent, run, tool } from "stratus-sdk/core";
 
 // Azure provider only
-import { AzureChatCompletionsModel, AzureResponsesModel } from "stratus/azure";
+import { AzureChatCompletionsModel, AzureResponsesModel } from "stratus-sdk/azure";
 ```
 
 ## Configuration
@@ -407,7 +409,7 @@ All errors extend `StratusError`:
 | `OutputGuardrailTripwireTriggered` | Output guardrail blocked the response |
 
 ```ts
-import { ModelError, MaxTurnsExceededError, RunAbortedError } from "stratus";
+import { ModelError, MaxTurnsExceededError, RunAbortedError } from "stratus-sdk";
 
 try {
   await run(agent, input);
