@@ -2,6 +2,7 @@ import type { Agent } from "./agent";
 import { RunContext } from "./context";
 import { MaxTurnsExceededError, OutputParseError, RunAbortedError, StratusError } from "./errors";
 import { runInputGuardrails, runOutputGuardrails } from "./guardrails";
+import type { HandoffDecision, ToolCallDecision } from "./hooks";
 import { handoffToDefinition } from "./handoff";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "./model";
 import { subagentToDefinition, subagentToTool } from "./subagent";
@@ -11,6 +12,29 @@ import { getCurrentTrace } from "./tracing";
 import type { AssistantMessage, ChatMessage, ToolDefinition, ToolMessage } from "./types";
 
 const DEFAULT_MAX_TURNS = 10;
+
+function getErrorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message;
+	return String(error);
+}
+
+function extractToolCallDecision(
+	result: void | ToolCallDecision | undefined,
+): ToolCallDecision | undefined {
+	if (result && typeof result === "object" && "decision" in result) {
+		return result;
+	}
+	return undefined;
+}
+
+function extractHandoffDecision(
+	result: void | HandoffDecision | undefined,
+): HandoffDecision | undefined {
+	if (result && typeof result === "object" && "decision" in result) {
+		return result;
+	}
+	return undefined;
+}
 
 export interface RunOptions<TContext> {
 	context?: TContext;
@@ -103,7 +127,7 @@ export async function run<TContext, TOutput = undefined>(
 					toolCallCount: response.toolCalls.length,
 				});
 			} catch (error) {
-				trace.endSpan(span, { error: String(error) });
+				trace.endSpan(span, { error: getErrorMessage(error) });
 				throw error;
 			}
 		} else {
@@ -152,22 +176,24 @@ export async function run<TContext, TOutput = undefined>(
 
 			// Fire beforeHandoff hook on current agent
 			if (currentAgent.hooks.beforeHandoff) {
-				const decision = await currentAgent.hooks.beforeHandoff({
+				const raw = await currentAgent.hooks.beforeHandoff({
 					fromAgent: currentAgent,
 					toAgent: handoffAgent,
 					context: ctx.context,
 				});
+				const decision = extractHandoffDecision(raw);
 
-				if (decision && typeof decision === "object" && "decision" in decision) {
-					if (decision.decision === "deny") {
-						allowHandoff = false;
-						// Replace the last tool message for the handoff with the denial reason
-						const lastToolMsg = messages[messages.length - 1];
-						if (lastToolMsg && lastToolMsg.role === "tool") {
-							lastToolMsg.content =
+				if (decision?.decision === "deny") {
+					allowHandoff = false;
+					// Replace the last tool message for the handoff with the denial reason
+					const lastToolMsg = messages[messages.length - 1];
+					if (lastToolMsg && lastToolMsg.role === "tool") {
+						messages[messages.length - 1] = {
+							...lastToolMsg,
+							content:
 								decision.reason ??
-								`Handoff to ${handoffAgent.name} was denied`;
-						}
+								`Handoff to ${handoffAgent.name} was denied`,
+						};
 					}
 				}
 			}
@@ -365,21 +391,23 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				let allowHandoff = true;
 
 				if (currentAgent.hooks.beforeHandoff) {
-					const decision = await currentAgent.hooks.beforeHandoff({
+					const raw = await currentAgent.hooks.beforeHandoff({
 						fromAgent: currentAgent,
 						toAgent: handoffAgent,
 						context: ctx.context,
 					});
+					const decision = extractHandoffDecision(raw);
 
-					if (decision && typeof decision === "object" && "decision" in decision) {
-						if (decision.decision === "deny") {
-							allowHandoff = false;
-							const lastToolMsg = messages[messages.length - 1];
-							if (lastToolMsg && lastToolMsg.role === "tool") {
-								lastToolMsg.content =
+					if (decision?.decision === "deny") {
+						allowHandoff = false;
+						const lastToolMsg = messages[messages.length - 1];
+						if (lastToolMsg && lastToolMsg.role === "tool") {
+							messages[messages.length - 1] = {
+								...lastToolMsg,
+								content:
 									decision.reason ??
-									`Handoff to ${handoffAgent.name} was denied`;
-							}
+									`Handoff to ${handoffAgent.name} was denied`,
+							};
 						}
 					}
 				}
@@ -447,7 +475,7 @@ async function buildFinalResult<TContext, TOutput>(
 			finalOutput = entryAgent.outputType.parse(parsed);
 		} catch (error) {
 			throw new OutputParseError(
-				`Failed to parse structured output: ${error instanceof Error ? error.message : String(error)}`,
+				`Failed to parse structured output: ${getErrorMessage(error)}`,
 				{ cause: error },
 			);
 		}
@@ -482,16 +510,20 @@ function buildToolDefs(agent: Agent<any, any>): ToolDefinition[] {
 }
 
 function extractUserText(messages: ChatMessage[]): string {
-	return messages
-		.filter((m) => m.role === "user")
-		.map((m) => {
-			if (typeof m.content === "string") return m.content;
-			return m.content
-				.filter((p): p is import("./types").TextContentPart => p.type === "text")
-				.map((p) => p.text)
-				.join("\n");
-		})
-		.join("\n");
+	const texts: string[] = [];
+	for (const msg of messages) {
+		if (msg.role !== "user") continue;
+		if (typeof msg.content === "string") {
+			texts.push(msg.content);
+		} else {
+			for (const part of msg.content) {
+				if (part.type === "text") {
+					texts.push(part.text);
+				}
+			}
+		}
+	}
+	return texts.join("\n");
 }
 
 function shouldStopAfterToolCalls(
@@ -501,13 +533,10 @@ function shouldStopAfterToolCalls(
 	if (agent.toolUseBehavior === "run_llm_again") return false;
 	if (agent.toolUseBehavior === "stop_on_first_tool") return true;
 	if ("stopAtToolNames" in agent.toolUseBehavior) {
-		return toolCalls.some((tc) =>
-			agent.toolUseBehavior !== "run_llm_again" &&
-			agent.toolUseBehavior !== "stop_on_first_tool" &&
-			(agent.toolUseBehavior as { stopAtToolNames: string[] }).stopAtToolNames.includes(
-				tc.function.name,
-			),
+		const stopNames = new Set(
+			(agent.toolUseBehavior as { stopAtToolNames: string[] }).stopAtToolNames,
 		);
+		return toolCalls.some((tc) => stopNames.has(tc.function.name));
 	}
 	return false;
 }
@@ -521,10 +550,17 @@ async function executeToolCallsWithHandoffs<TContext>(
 ): Promise<{ toolMessages: ToolMessage[]; handoffAgent?: Agent<TContext, any> }> {
 	let handoffAgent: Agent<TContext, any> | undefined;
 
+	// Build O(1) lookup maps
+	const handoffsByName = new Map(agent.handoffs.map((h) => [h.toolName, h]));
+	const subagentsByName = new Map(agent.subagents.map((sa) => [sa.toolName, sa]));
+	const toolsByName = new Map(agent.tools.map((t) => [t.name, t]));
+
 	const results = await Promise.all(
 		toolCalls.map(async (tc) => {
+			const tcName = tc.function.name;
+
 			// Check handoffs first
-			const matchedHandoff = agent.handoffs.find((h) => h.toolName === tc.function.name);
+			const matchedHandoff = handoffsByName.get(tcName);
 			if (matchedHandoff) {
 				if (matchedHandoff.onHandoff) {
 					await matchedHandoff.onHandoff(ctx.context);
@@ -538,31 +574,27 @@ async function executeToolCallsWithHandoffs<TContext>(
 			}
 
 			// Check subagents
-			const matchedSubagent = agent.subagents.find(
-				(sa) => sa.toolName === tc.function.name,
-			);
+			const matchedSubagent = subagentsByName.get(tcName);
 			if (matchedSubagent) {
 				const saTool = subagentToTool(matchedSubagent);
 				try {
 					const params = JSON.parse(tc.function.arguments);
 
 					if (agent.hooks.beforeToolCall) {
-						const decision = await agent.hooks.beforeToolCall({
-							agent,
-							toolCall: { id: tc.id, type: "function", function: tc.function },
-							context: ctx.context,
-						});
+						const decision = extractToolCallDecision(
+							await agent.hooks.beforeToolCall({
+								agent,
+								toolCall: { id: tc.id, type: "function", function: tc.function },
+								context: ctx.context,
+							}),
+						);
 
-						if (decision && typeof decision === "object" && "decision" in decision) {
-							if (decision.decision === "deny") {
-								return {
-									role: "tool" as const,
-									tool_call_id: tc.id,
-									content:
-										decision.reason ??
-										`Tool call "${tc.function.name}" was denied`,
-								};
-							}
+						if (decision?.decision === "deny") {
+							return {
+								role: "tool" as const,
+								tool_call_id: tc.id,
+								content: decision.reason ?? `Tool call "${tcName}" was denied`,
+							};
 						}
 					}
 
@@ -571,7 +603,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 						const span = trace.startSpan(
 							`subagent:${matchedSubagent.agent.name}`,
 							"subagent",
-							{ toolName: tc.function.name },
+							{ toolName: tcName },
 						);
 						try {
 							result = await saTool.execute(ctx.context, params, { signal });
@@ -597,22 +629,21 @@ async function executeToolCallsWithHandoffs<TContext>(
 						content: result,
 					};
 				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
 					return {
 						role: "tool" as const,
 						tool_call_id: tc.id,
-						content: `Error executing sub-agent "${matchedSubagent.agent.name}": ${message}`,
+						content: `Error executing sub-agent "${matchedSubagent.agent.name}": ${getErrorMessage(error)}`,
 					};
 				}
 			}
 
 			// Otherwise, execute as normal tool
-			const tool = agent.tools.find((t) => t.name === tc.function.name);
+			const tool = toolsByName.get(tcName);
 			if (!tool) {
 				return {
 					role: "tool" as const,
 					tool_call_id: tc.id,
-					content: `Error: Unknown tool "${tc.function.name}"`,
+					content: `Error: Unknown tool "${tcName}"`,
 				};
 			}
 
@@ -621,31 +652,31 @@ async function executeToolCallsWithHandoffs<TContext>(
 
 				// Fire beforeToolCall hook
 				if (agent.hooks.beforeToolCall) {
-					const decision = await agent.hooks.beforeToolCall({
-						agent,
-						toolCall: { id: tc.id, type: "function", function: tc.function },
-						context: ctx.context,
-					});
+					const decision = extractToolCallDecision(
+						await agent.hooks.beforeToolCall({
+							agent,
+							toolCall: { id: tc.id, type: "function", function: tc.function },
+							context: ctx.context,
+						}),
+					);
 
-					if (decision && typeof decision === "object" && "decision" in decision) {
-						if (decision.decision === "deny") {
-							return {
-								role: "tool" as const,
-								tool_call_id: tc.id,
-								content: decision.reason ?? `Tool call "${tc.function.name}" was denied`,
-							};
-						}
-						if (decision.decision === "modify") {
-							params = decision.modifiedParams;
-						}
+					if (decision?.decision === "deny") {
+						return {
+							role: "tool" as const,
+							tool_call_id: tc.id,
+							content: decision.reason ?? `Tool call "${tcName}" was denied`,
+						};
+					}
+					if (decision?.decision === "modify") {
+						params = decision.modifiedParams;
 					}
 				}
 
 				checkAborted(signal);
 				let result: string;
 				if (trace) {
-					const span = trace.startSpan(`tool:${tc.function.name}`, "tool_execution", {
-						toolName: tc.function.name,
+					const span = trace.startSpan(`tool:${tcName}`, "tool_execution", {
+						toolName: tcName,
 					});
 					try {
 						result = await tool.execute(ctx.context, params, { signal });
@@ -672,11 +703,10 @@ async function executeToolCallsWithHandoffs<TContext>(
 					content: result,
 				};
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
 				return {
 					role: "tool" as const,
 					tool_call_id: tc.id,
-					content: `Error executing tool "${tc.function.name}": ${message}`,
+					content: `Error executing tool "${tcName}": ${getErrorMessage(error)}`,
 				};
 			}
 		}),

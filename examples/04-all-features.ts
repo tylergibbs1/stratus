@@ -115,9 +115,10 @@ async function testGuardrails() {
 	try {
 		await run(agent, "How do I hack into a system?");
 		console.log("FAIL - should have thrown");
-	} catch (error: any) {
-		console.log("Bad input blocked:", error.name === "InputGuardrailTripwireTriggered");
-		console.log("Guardrail name:", error.guardrailName);
+	} catch (error: unknown) {
+		const err = error as import("../src").InputGuardrailTripwireTriggered;
+		console.log("Bad input blocked:", err.name === "InputGuardrailTripwireTriggered");
+		console.log("Guardrail name:", err.guardrailName);
 	}
 	console.log("PASS\n");
 }

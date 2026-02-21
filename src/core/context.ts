@@ -15,15 +15,15 @@ export class RunContext<TContext> {
 
 	addUsage(usage: UsageInfo | undefined): void {
 		if (!usage) return;
-		this.usage.promptTokens += usage.promptTokens;
-		this.usage.completionTokens += usage.completionTokens;
-		this.usage.totalTokens += usage.totalTokens;
+		const u = this.usage;
+		u.promptTokens += usage.promptTokens;
+		u.completionTokens += usage.completionTokens;
+		u.totalTokens += usage.totalTokens;
 		if (usage.cacheReadTokens !== undefined) {
-			this.usage.cacheReadTokens = (this.usage.cacheReadTokens ?? 0) + usage.cacheReadTokens;
+			u.cacheReadTokens = (u.cacheReadTokens ?? 0) + usage.cacheReadTokens;
 		}
 		if (usage.cacheCreationTokens !== undefined) {
-			this.usage.cacheCreationTokens =
-				(this.usage.cacheCreationTokens ?? 0) + usage.cacheCreationTokens;
+			u.cacheCreationTokens = (u.cacheCreationTokens ?? 0) + usage.cacheCreationTokens;
 		}
 	}
 }

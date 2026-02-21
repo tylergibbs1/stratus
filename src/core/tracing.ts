@@ -61,7 +61,11 @@ export class TraceContext {
 		if (metadata) {
 			span.metadata = { ...span.metadata, ...metadata };
 		}
-		this.spanStack.pop();
+		// Pop the matching span; handle out-of-order or missing endSpan calls
+		const idx = this.spanStack.lastIndexOf(span);
+		if (idx >= 0) {
+			this.spanStack.splice(idx, 1);
+		}
 	}
 
 	finish(): Trace {

@@ -10,6 +10,10 @@
     "./core": {
       "types": "./src/core/index.ts",
       "import": "./src/core/index.ts"
+    },
+    "./azure": {
+      "types": "./src/azure/index.ts",
+      "import": "./src/azure/index.ts"
     }
   },
   "scripts": {

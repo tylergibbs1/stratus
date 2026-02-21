@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { Agent, type HandoffInput, type Instructions } from "./agent";
+import { StratusError } from "./errors";
 import type { InputGuardrail, OutputGuardrail } from "./guardrails";
 import type { AgentHooks } from "./hooks";
 import type { Model, StreamEvent } from "./model";
@@ -69,21 +70,21 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	}
 
 	send(message: string | ContentPart[]): void {
-		if (this._closed) throw new Error("Session is closed");
+		if (this._closed) throw new StratusError("Session is closed");
 		this._messages.push({ role: "user", content: message });
 		this._resultPromise = null;
 	}
 
 	stream(options?: { signal?: AbortSignal }): AsyncGenerator<StreamEvent> {
-		if (this._closed) throw new Error("Session is closed");
+		if (this._closed) throw new StratusError("Session is closed");
 		if (this._streaming)
-			throw new Error("Already streaming. Consume the current stream first.");
+			throw new StratusError("Already streaming. Consume the current stream first.");
 		return this._streamInternal(options?.signal);
 	}
 
 	get result(): Promise<RunResult<TOutput>> {
 		if (!this._resultPromise) {
-			throw new Error("No pending result. Call stream() first.");
+			throw new StratusError("No pending result. Call stream() first.");
 		}
 		return this._resultPromise;
 	}
@@ -93,8 +94,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	}
 
 	save(): SessionSnapshot {
-		if (this._closed) throw new Error("Session is closed");
-		if (this._streaming) throw new Error("Cannot save while streaming");
+		if (this._closed) throw new StratusError("Session is closed");
+		if (this._streaming) throw new StratusError("Cannot save while streaming");
 		return {
 			id: this.id,
 			messages: structuredClone(this._messages),

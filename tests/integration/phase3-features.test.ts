@@ -385,7 +385,7 @@ describe("integration: abort signal", () => {
 			name: "slow_task",
 			description: "A slow task",
 			parameters: z.object({}),
-			execute: async (_ctx, _params, options) => {
+			execute: async (_ctx, _params) => {
 				// Abort immediately inside the tool
 				ac.abort();
 				return "done";
