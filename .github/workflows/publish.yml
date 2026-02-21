@@ -21,6 +21,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing version $VERSION"
+          npm version "$VERSION" --no-git-tag-version
+
       - name: Typecheck
         run: bunx tsc -p tsconfig.build.json --noEmit
 
