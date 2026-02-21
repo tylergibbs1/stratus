@@ -4,6 +4,7 @@ import { type Handoff, handoff as normalizeHandoff } from "./handoff";
 import type { AgentHooks } from "./hooks";
 import type { Model } from "./model";
 import type { SubAgent } from "./subagent";
+import type { AgentTool } from "./hosted-tool";
 import type { FunctionTool } from "./tool";
 import type { ModelSettings, ResponseFormat, ToolUseBehavior } from "./types";
 import { zodToJsonSchema } from "./utils/zod";
@@ -16,7 +17,7 @@ export interface AgentConfig<TContext, TOutput = undefined> {
 	name: string;
 	instructions?: Instructions<TContext>;
 	model?: Model;
-	tools?: FunctionTool[];
+	tools?: AgentTool[];
 	subagents?: SubAgent[];
 	modelSettings?: ModelSettings;
 	responseFormat?: ResponseFormat;
@@ -33,7 +34,7 @@ export class Agent<TContext = unknown, TOutput = undefined> {
 	readonly name: string;
 	readonly instructions?: Instructions<TContext>;
 	readonly model?: Model;
-	readonly tools: FunctionTool[];
+	readonly tools: AgentTool[];
 	readonly subagents: SubAgent[];
 	readonly modelSettings?: ModelSettings;
 	readonly responseFormat?: ResponseFormat;

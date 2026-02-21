@@ -13,6 +13,12 @@ export type { SessionConfig, SessionSnapshot } from "./session";
 export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";
 
+export { isHostedTool, isFunctionTool } from "./hosted-tool";
+export type { HostedTool, AgentTool } from "./hosted-tool";
+
+export { webSearchTool, codeInterpreterTool, mcpTool, imageGenerationTool } from "./builtin-tools";
+export type { WebSearchToolConfig, CodeInterpreterToolConfig, McpToolConfig } from "./builtin-tools";
+
 export { TodoList, todoTool } from "./todo";
 export type { Todo, TodoStatus, TodoUpdateListener } from "./todo";
 

@@ -1,4 +1,4 @@
-import { ContentFilterError, ModelError } from "../core/errors";
+import { ContentFilterError, ModelError, StratusError } from "../core/errors";
 import type {
 	FinishReason,
 	Model,
@@ -8,7 +8,7 @@ import type {
 	StreamEvent,
 	UsageInfo,
 } from "../core/model";
-import type { ChatMessage, ToolCall } from "../core/types";
+import type { ChatMessage, ToolCall, ToolDefinition } from "../core/types";
 import { resolveChatCompletionsUrl } from "./endpoint";
 import { parseSSE } from "./sse-parser";
 
@@ -161,7 +161,14 @@ export class AzureChatCompletionsModel implements Model {
 		}
 
 		if (request.tools && request.tools.length > 0) {
-			body.tools = request.tools;
+			for (const tool of request.tools) {
+				if (!("function" in tool)) {
+					throw new StratusError(
+						"Hosted tools (web_search, code_interpreter, mcp, image_generation) are not supported by the Chat Completions API. Use AzureResponsesModel instead.",
+					);
+				}
+			}
+			body.tools = request.tools as ToolDefinition[];
 		}
 
 		if (request.responseFormat) {

@@ -11,6 +11,7 @@ export interface RunResultOptions<TOutput = undefined> {
 	finishReason?: FinishReason;
 	numTurns?: number;
 	totalCostUsd?: number;
+	responseId?: string;
 }
 
 export class RunResult<TOutput = undefined> {
@@ -22,6 +23,7 @@ export class RunResult<TOutput = undefined> {
 	readonly finishReason?: FinishReason;
 	readonly numTurns: number;
 	readonly totalCostUsd: number;
+	readonly responseId?: string;
 
 	constructor(opts: RunResultOptions<TOutput>) {
 		this.output = opts.output;
@@ -32,5 +34,6 @@ export class RunResult<TOutput = undefined> {
 		this.finishReason = opts.finishReason;
 		this.numTurns = opts.numTurns ?? 0;
 		this.totalCostUsd = opts.totalCostUsd ?? 0;
+		this.responseId = opts.responseId;
 	}
 }

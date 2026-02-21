@@ -13,6 +13,7 @@ import type {
 	ContentPart,
 	ResponseFormat,
 	ToolCall,
+	ToolChoice,
 	ToolDefinition,
 } from "../core/types";
 import { resolveResponsesUrl } from "./endpoint";
@@ -23,6 +24,7 @@ export interface AzureResponsesModelConfig {
 	apiKey: string;
 	deployment: string;
 	apiVersion?: string;
+	store?: boolean;
 }
 
 const DEFAULT_API_VERSION = "2025-04-01-preview";
@@ -31,10 +33,12 @@ export class AzureResponsesModel implements Model {
 	private readonly url: string;
 	private readonly apiKey: string;
 	private readonly deployment: string;
+	private readonly store: boolean;
 
 	constructor(config: AzureResponsesModelConfig) {
 		this.apiKey = config.apiKey;
 		this.deployment = config.deployment;
+		this.store = config.store ?? false;
 		this.url = resolveResponsesUrl(
 			config.endpoint,
 			config.apiVersion ?? DEFAULT_API_VERSION,
@@ -67,6 +71,7 @@ export class AzureResponsesModel implements Model {
 		const toolCalls = new Map<string, { callId: string; name: string; arguments: string }>();
 		let usage: UsageInfo | undefined;
 		let finishReason: FinishReason | undefined;
+		let responseId: string | undefined;
 
 		for await (const data of parseSSE(response.body)) {
 			let event: ResponsesStreamEvent;
@@ -124,6 +129,9 @@ export class AzureResponsesModel implements Model {
 				}
 				case "response.completed": {
 					const resp = event.response;
+					if (resp?.id) {
+						responseId = resp.id;
+					}
 					if (resp?.usage) {
 						usage = {
 							promptTokens: resp.usage.input_tokens,
@@ -156,6 +164,7 @@ export class AzureResponsesModel implements Model {
 				toolCalls: finalToolCalls,
 				usage,
 				finishReason,
+				responseId,
 			},
 		};
 	}
@@ -166,7 +175,7 @@ export class AzureResponsesModel implements Model {
 	): Record<string, unknown> {
 		const body: Record<string, unknown> = {
 			model: this.deployment,
-			store: false,
+			store: this.store,
 		};
 
 		const { instructions, input } = convertMessages(request.messages);
@@ -182,11 +191,22 @@ export class AzureResponsesModel implements Model {
 		}
 
 		if (request.tools && request.tools.length > 0) {
-			body.tools = request.tools.map(flattenToolDefinition);
+			body.tools = request.tools.map((def) => {
+				if (isFunctionToolDefinition(def)) {
+					return flattenToolDefinition(def);
+				}
+				// Hosted tool definitions pass through as-is
+				return def;
+			});
 		}
 
 		if (request.responseFormat) {
 			body.text = convertResponseFormat(request.responseFormat);
+		}
+
+		// Only send previous_response_id when store is enabled (API needs to persist responses)
+		if (this.store && request.previousResponseId) {
+			body.previous_response_id = request.previousResponseId;
 		}
 
 		const s = request.modelSettings;
@@ -196,7 +216,7 @@ export class AzureResponsesModel implements Model {
 			if (s.maxTokens !== undefined) body.max_output_tokens = s.maxTokens;
 			if (s.maxCompletionTokens !== undefined)
 				body.max_output_tokens = s.maxCompletionTokens;
-			if (s.toolChoice !== undefined) body.tool_choice = s.toolChoice;
+			if (s.toolChoice !== undefined) body.tool_choice = convertToolChoice(s.toolChoice);
 			if (s.parallelToolCalls !== undefined) body.parallel_tool_calls = s.parallelToolCalls;
 			if (s.reasoningEffort !== undefined)
 				body.reasoning = { effort: s.reasoningEffort };
@@ -277,6 +297,7 @@ export class AzureResponsesModel implements Model {
 				toolCalls,
 				usage: json.usage ? parseResponsesUsage(json.usage) : undefined,
 				finishReason: "length",
+				responseId: json.id,
 			};
 		}
 
@@ -295,6 +316,7 @@ export class AzureResponsesModel implements Model {
 			toolCalls,
 			usage,
 			finishReason,
+			responseId: json.id,
 		};
 	}
 }
@@ -417,6 +439,21 @@ function convertUserContent(
 	});
 }
 
+function isFunctionToolDefinition(
+	def: ToolDefinition | Record<string, unknown>,
+): def is ToolDefinition {
+	return "function" in def && typeof (def as ToolDefinition).function === "object";
+}
+
+function convertToolChoice(
+	toolChoice: ToolChoice,
+): string | { type: string; name: string } {
+	if (typeof toolChoice === "string") return toolChoice;
+	// Chat Completions format: { type: "function", function: { name } }
+	// Responses API format: { type: "function", name }
+	return { type: toolChoice.type, name: toolChoice.function.name };
+}
+
 function flattenToolDefinition(
 	def: ToolDefinition,
 ): Record<string, unknown> {
@@ -459,6 +496,7 @@ function mapStatus(status: string | undefined): FinishReason {
 // --- Responses API types ---
 
 interface ResponsesApiResponse {
+	id?: string;
 	status: string;
 	output?: ResponsesOutputItem[];
 	usage?: ResponsesUsage;
@@ -504,4 +542,4 @@ type ResponsesStreamEvent =
 	| { type: "response.output_item.added"; item?: ResponsesStreamItem }
 	| { type: "response.function_call_arguments.delta"; item_id?: string; delta?: string }
 	| { type: "response.output_item.done"; item?: ResponsesStreamItem }
-	| { type: "response.completed"; response?: { status?: string; usage?: ResponsesUsage } };
+	| { type: "response.completed"; response?: { id?: string; status?: string; usage?: ResponsesUsage } };

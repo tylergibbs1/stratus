@@ -8,13 +8,13 @@ import type { Model, StreamEvent } from "./model";
 import type { RunResult } from "./result";
 import { stream as coreStream } from "./run";
 import type { SubAgent } from "./subagent";
-import type { FunctionTool } from "./tool";
+import type { AgentTool } from "./hosted-tool";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 
 export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	model: Model;
 	instructions?: Instructions<TContext>;
-	tools?: FunctionTool[];
+	tools?: AgentTool[];
 	subagents?: SubAgent[];
 	modelSettings?: ModelSettings;
 	outputType?: z.ZodType<TOutput>;

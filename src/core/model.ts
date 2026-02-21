@@ -2,9 +2,10 @@ import type { ChatMessage, ModelSettings, ResponseFormat, ToolCall, ToolDefiniti
 
 export interface ModelRequest {
 	messages: ChatMessage[];
-	tools?: ToolDefinition[];
+	tools?: (ToolDefinition | Record<string, unknown>)[];
 	modelSettings?: ModelSettings;
 	responseFormat?: ResponseFormat;
+	previousResponseId?: string;
 }
 
 export interface UsageInfo {
@@ -23,6 +24,7 @@ export interface ModelResponse {
 	toolCalls: ToolCall[];
 	usage?: UsageInfo;
 	finishReason?: FinishReason;
+	responseId?: string;
 }
 
 export type StreamEvent =

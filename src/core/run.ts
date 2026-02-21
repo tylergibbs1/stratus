@@ -19,11 +19,13 @@ import type {
 	ToolMatcher,
 } from "./hooks";
 import { handoffToDefinition } from "./handoff";
+import { isHostedTool, isFunctionTool } from "./hosted-tool";
 import type { FinishReason, Model, ModelRequest, ModelResponse, StreamEvent, UsageInfo } from "./model";
 import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { SubAgent } from "./subagent";
 import { RunResult } from "./result";
 import { toolToDefinition } from "./tool";
+import type { FunctionTool } from "./tool";
 import { getCurrentTrace } from "./tracing";
 import type { AssistantMessage, ChatMessage, ToolCall, ToolDefinition, ToolMessage } from "./types";
 
@@ -206,6 +208,7 @@ export async function run<TContext, TOutput = undefined>(
 	}
 
 	let lastFinishReason: FinishReason | undefined;
+	let lastResponseId: string | undefined;
 
 	for (let turn = 0; turn < maxTurns; turn++) {
 		checkAborted(signal);
@@ -216,6 +219,7 @@ export async function run<TContext, TOutput = undefined>(
 			tools: toolDefs.length > 0 ? toolDefs : undefined,
 			modelSettings: currentAgent.modelSettings,
 			responseFormat: currentAgent.getResponseFormat(),
+			previousResponseId: lastResponseId,
 		};
 
 		let response: ModelResponse;
@@ -240,6 +244,7 @@ export async function run<TContext, TOutput = undefined>(
 
 		checkAborted(signal);
 		lastFinishReason = response.finishReason;
+		if (response.responseId) lastResponseId = response.responseId;
 		ctx.addUsage(response.usage);
 		ctx.numTurns++;
 
@@ -267,7 +272,7 @@ export async function run<TContext, TOutput = undefined>(
 		messages.push(assistantMsg);
 
 		if (response.toolCalls.length === 0) {
-			return buildFinalResult(agent, currentAgent, messages, ctx, trace, lastFinishReason);
+			return buildFinalResult(agent, currentAgent, messages, ctx, trace, lastFinishReason, lastResponseId);
 		}
 
 		const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
@@ -290,6 +295,7 @@ export async function run<TContext, TOutput = undefined>(
 				finishReason: lastFinishReason,
 				numTurns: ctx.numTurns,
 				totalCostUsd: ctx.totalCostUsd,
+				responseId: lastResponseId,
 			});
 		}
 
@@ -444,6 +450,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		}
 
 		let lastFinishReason: FinishReason | undefined;
+		let lastResponseId: string | undefined;
 
 		for (let turn = 0; turn < maxTurns; turn++) {
 			checkAborted(signal);
@@ -454,6 +461,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				tools: toolDefs.length > 0 ? toolDefs : undefined,
 				modelSettings: currentAgent.modelSettings,
 				responseFormat: currentAgent.getResponseFormat(),
+				previousResponseId: lastResponseId,
 			};
 
 			let finalResponse: ModelResponse | undefined;
@@ -473,6 +481,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 			checkAborted(signal);
 			lastFinishReason = finalResponse!.finishReason;
+			if (finalResponse!.responseId) lastResponseId = finalResponse!.responseId;
 			ctx.addUsage(finalResponse!.usage);
 			ctx.numTurns++;
 
@@ -509,6 +518,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 					ctx,
 					trace,
 					lastFinishReason,
+					lastResponseId,
 				);
 				resolveResult(result);
 				return;
@@ -535,6 +545,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 						finishReason: lastFinishReason,
 						numTurns: ctx.numTurns,
 						totalCostUsd: ctx.totalCostUsd,
+						responseId: lastResponseId,
 					}),
 				);
 				return;
@@ -606,6 +617,7 @@ async function buildFinalResult<TContext, TOutput>(
 	ctx: RunContext<TContext>,
 	trace: ReturnType<typeof getCurrentTrace>,
 	finishReason?: FinishReason,
+	responseId?: string,
 ): Promise<RunResult<TOutput>> {
 	const lastMessage = messages[messages.length - 1];
 	const rawOutput =
@@ -652,6 +664,7 @@ async function buildFinalResult<TContext, TOutput>(
 		finishReason,
 		numTurns: ctx.numTurns,
 		totalCostUsd: ctx.totalCostUsd,
+		responseId,
 	});
 
 	// Fire afterRun hook on the entry agent
@@ -662,8 +675,15 @@ async function buildFinalResult<TContext, TOutput>(
 	return result;
 }
 
-function buildToolDefs(agent: Agent<any, any>): ToolDefinition[] {
-	const defs: ToolDefinition[] = agent.tools.map((t) => toolToDefinition(t));
+function buildToolDefs(agent: Agent<any, any>): (ToolDefinition | Record<string, unknown>)[] {
+	const defs: (ToolDefinition | Record<string, unknown>)[] = [];
+	for (const t of agent.tools) {
+		if (isHostedTool(t)) {
+			defs.push(t.definition);
+		} else {
+			defs.push(toolToDefinition(t));
+		}
+	}
 	for (const sa of agent.subagents) {
 		defs.push(subagentToDefinition(sa));
 	}
@@ -717,7 +737,8 @@ async function executeToolCallsWithHandoffs<TContext>(
 	// Build O(1) lookup maps
 	const handoffsByName = new Map(agent.handoffs.map((h) => [h.toolName, h]));
 	const subagentsByName = new Map(agent.subagents.map((sa) => [sa.toolName, sa]));
-	const toolsByName = new Map(agent.tools.map((t) => [t.name, t]));
+	const functionTools = agent.tools.filter(isFunctionTool) as FunctionTool[];
+	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
 
 	const results = await Promise.all(
 		toolCalls.map(async (tc) => {
