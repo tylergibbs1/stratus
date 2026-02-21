@@ -1,22 +1,26 @@
 {
-  "name": "stratus",
+  "name": "stratus-sdk",
   "version": "0.5.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./core": {
-      "types": "./src/core/index.ts",
-      "import": "./src/core/index.ts"
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
     },
     "./azure": {
-      "types": "./src/azure/index.ts",
-      "import": "./src/azure/index.ts"
+      "types": "./dist/azure/index.d.ts",
+      "import": "./dist/azure/index.js"
     }
   },
+  "files": ["dist"],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
