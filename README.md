@@ -15,12 +15,12 @@
 
 A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
 
-- **One framework, two swappable backends** — Chat Completions and Responses API through the same interface. Switch with one line.
-- **No more 404 config spiral** — auto-endpoint detection for standard, foundry, and full URLs. Built-in retry with exponential backoff and unified content filter errors.
-- **One call, entire tool loop** — model calls, parallel tool execution, result appending, and looping back. No manual message array management.
-- **Client-side agent state** — no server-side threads or opaque IDs. Save, resume, and fork conversations with portable snapshots.
-- **Budget enforcement built in** — set a dollar limit and the run stops before you get a surprise bill. Cost estimation accounts for cached and reasoning tokens.
-- **Auth validated at construction** — API key or Entra ID, enforced mutually exclusive. No silent misconfiguration that surfaces as a mysterious 401 three calls later.
+- **Built for Azure, not bolted on** — auto-endpoint detection, Entra ID auth, content filter errors as typed exceptions, and built-in retry. No 404 config spirals, no "which SDK do I use" confusion.
+- **Two API backends, one interface** — Chat Completions and Responses API through the same agent, tool, and session code. Start with one, switch with a single line.
+- **Multi-agent orchestration** — handoffs, subagents, guardrails, and hooks compose through a single run loop. Hooks can deny or modify tool calls at runtime.
+- **Client-side state you control** — save, resume, and fork conversations as portable JSON snapshots. No server-side threads, no opaque session IDs.
+- **Type-safe from schema to output** — Zod schemas drive tool parameters, structured output, and validation. Context types flow through agents, hooks, and guardrails at compile time.
+- **Zero dependencies** — only Zod as a peer dep. No transitive dependency sprawl, no framework lock-in.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `todo tracking` `cost tracking`
 
