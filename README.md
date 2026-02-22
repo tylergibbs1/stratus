@@ -33,9 +33,9 @@ bun add zod
 
 ```ts
 import { z } from "zod";
-import { Agent, AzureChatCompletionsModel, run, tool } from "stratus-sdk";
+import { Agent, AzureResponsesModel, run, tool } from "stratus-sdk";
 
-const model = new AzureChatCompletionsModel({
+const model = new AzureResponsesModel({
   endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
   apiKey: process.env.AZURE_OPENAI_API_KEY!,
   deployment: "gpt-5.2",
