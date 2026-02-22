@@ -1,4 +1,4 @@
-import { ContentFilterError, ModelError } from "../core/errors";
+import { ContentFilterError, ModelError, StratusError } from "../core/errors";
 import type {
 	FinishReason,
 	Model,
@@ -11,6 +11,7 @@ import type {
 import type {
 	ChatMessage,
 	ContentPart,
+	HostedToolDefinition,
 	ResponseFormat,
 	ToolCall,
 	ToolChoice,
@@ -21,7 +22,8 @@ import { parseSSE } from "./sse-parser";
 
 export interface AzureResponsesModelConfig {
 	endpoint: string;
-	apiKey: string;
+	apiKey?: string;
+	azureAdTokenProvider?: () => Promise<string>;
 	deployment: string;
 	apiVersion?: string;
 	store?: boolean;
@@ -31,18 +33,38 @@ const DEFAULT_API_VERSION = "2025-04-01-preview";
 
 export class AzureResponsesModel implements Model {
 	private readonly url: string;
-	private readonly apiKey: string;
+	private readonly apiKey?: string;
+	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
 	private readonly store: boolean;
 
 	constructor(config: AzureResponsesModelConfig) {
+		if (config.apiKey && config.azureAdTokenProvider) {
+			throw new StratusError(
+				"Provide either apiKey or azureAdTokenProvider, not both",
+			);
+		}
+		if (!config.apiKey && !config.azureAdTokenProvider) {
+			throw new StratusError(
+				"Provide either apiKey or azureAdTokenProvider",
+			);
+		}
 		this.apiKey = config.apiKey;
+		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
 		this.store = config.store ?? false;
 		this.url = resolveResponsesUrl(
 			config.endpoint,
 			config.apiVersion ?? DEFAULT_API_VERSION,
 		);
+	}
+
+	private async getAuthHeaders(): Promise<Record<string, string>> {
+		if (this.tokenProvider) {
+			const token = await this.tokenProvider();
+			return { Authorization: `Bearer ${token}` };
+		}
+		return { "api-key": this.apiKey! };
 	}
 
 	async getResponse(
@@ -233,11 +255,12 @@ export class AzureResponsesModel implements Model {
 	): Promise<Response> {
 		const maxRetries = 3;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			const authHeaders = await this.getAuthHeaders();
 			const response = await fetch(this.url, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"api-key": this.apiKey,
+					...authHeaders,
 				},
 				body: JSON.stringify(body),
 				signal,
@@ -440,14 +463,18 @@ function convertUserContent(
 }
 
 function isFunctionToolDefinition(
-	def: ToolDefinition | Record<string, unknown>,
+	def: ToolDefinition | HostedToolDefinition,
 ): def is ToolDefinition {
-	return "function" in def && typeof (def as ToolDefinition).function === "object";
+	return "function" in def && (def as ToolDefinition).function != null && typeof (def as ToolDefinition).function === "object";
 }
 
-function convertToolChoice(
-	toolChoice: ToolChoice,
-): string | { type: string; name: string } {
+type ResponsesToolChoice =
+	| "auto"
+	| "none"
+	| "required"
+	| { type: "function"; name: string };
+
+function convertToolChoice(toolChoice: ToolChoice): ResponsesToolChoice {
 	if (typeof toolChoice === "string") return toolChoice;
 	// Chat Completions format: { type: "function", function: { name } }
 	// Responses API format: { type: "function", name }

@@ -1,8 +1,8 @@
-import type { ChatMessage, ModelSettings, ResponseFormat, ToolCall, ToolDefinition } from "./types";
+import type { ChatMessage, HostedToolDefinition, ModelSettings, ResponseFormat, ToolCall, ToolDefinition } from "./types";
 
 export interface ModelRequest {
 	messages: ChatMessage[];
-	tools?: (ToolDefinition | Record<string, unknown>)[];
+	tools?: (ToolDefinition | HostedToolDefinition)[];
 	modelSettings?: ModelSettings;
 	responseFormat?: ResponseFormat;
 	previousResponseId?: string;

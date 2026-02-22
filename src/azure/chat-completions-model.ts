@@ -8,13 +8,14 @@ import type {
 	StreamEvent,
 	UsageInfo,
 } from "../core/model";
-import type { ChatMessage, ToolCall, ToolDefinition } from "../core/types";
+import type { ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition } from "../core/types";
 import { resolveChatCompletionsUrl } from "./endpoint";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureChatCompletionsModelConfig {
 	endpoint: string;
-	apiKey: string;
+	apiKey?: string;
+	azureAdTokenProvider?: () => Promise<string>;
 	deployment: string;
 	apiVersion?: string;
 }
@@ -23,17 +24,37 @@ const DEFAULT_API_VERSION = "2025-03-01-preview";
 
 export class AzureChatCompletionsModel implements Model {
 	private readonly url: string;
-	private readonly apiKey: string;
+	private readonly apiKey?: string;
+	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
 
 	constructor(config: AzureChatCompletionsModelConfig) {
+		if (config.apiKey && config.azureAdTokenProvider) {
+			throw new StratusError(
+				"Provide either apiKey or azureAdTokenProvider, not both",
+			);
+		}
+		if (!config.apiKey && !config.azureAdTokenProvider) {
+			throw new StratusError(
+				"Provide either apiKey or azureAdTokenProvider",
+			);
+		}
 		this.apiKey = config.apiKey;
+		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
 		this.url = resolveChatCompletionsUrl(
 			config.endpoint,
 			config.deployment,
 			config.apiVersion ?? DEFAULT_API_VERSION,
 		);
+	}
+
+	private async getAuthHeaders(): Promise<Record<string, string>> {
+		if (this.tokenProvider) {
+			const token = await this.tokenProvider();
+			return { Authorization: `Bearer ${token}` };
+		}
+		return { "api-key": this.apiKey! };
 	}
 
 	async getResponse(
@@ -161,14 +182,8 @@ export class AzureChatCompletionsModel implements Model {
 		}
 
 		if (request.tools && request.tools.length > 0) {
-			for (const tool of request.tools) {
-				if (!("function" in tool)) {
-					throw new StratusError(
-						"Hosted tools (web_search, code_interpreter, mcp, image_generation) are not supported by the Chat Completions API. Use AzureResponsesModel instead.",
-					);
-				}
-			}
-			body.tools = request.tools as ToolDefinition[];
+			assertAllFunctionTools(request.tools);
+			body.tools = request.tools;
 		}
 
 		if (request.responseFormat) {
@@ -201,11 +216,12 @@ export class AzureChatCompletionsModel implements Model {
 	): Promise<Response> {
 		const maxRetries = 3;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			const authHeaders = await this.getAuthHeaders();
 			const response = await fetch(this.url, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"api-key": this.apiKey,
+					...authHeaders,
 				},
 				body: JSON.stringify(body),
 				signal,
@@ -297,6 +313,18 @@ export class AzureChatCompletionsModel implements Model {
 			usage,
 			finishReason: choice.finish_reason as FinishReason,
 		};
+	}
+}
+
+function assertAllFunctionTools(
+	tools: (ToolDefinition | HostedToolDefinition)[],
+): asserts tools is ToolDefinition[] {
+	for (const tool of tools) {
+		if (!("function" in tool)) {
+			throw new StratusError(
+				"Hosted tools (web_search, code_interpreter, mcp, image_generation) are not supported by the Chat Completions API. Use AzureResponsesModel instead.",
+			);
+		}
 	}
 }
 

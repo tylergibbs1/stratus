@@ -67,6 +67,7 @@ export type {
 	ToolMessage,
 	ToolCall,
 	ToolDefinition,
+	HostedToolDefinition,
 	ModelSettings,
 	ReasoningEffort,
 	ResponseFormat,

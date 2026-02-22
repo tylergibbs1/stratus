@@ -1,9 +1,10 @@
+import type { HostedToolDefinition } from "./types";
 import type { FunctionTool } from "./tool";
 
 export interface HostedTool {
 	type: "hosted";
 	name: string;
-	definition: Record<string, unknown>;
+	definition: HostedToolDefinition;
 }
 
 export type AgentTool = FunctionTool | HostedTool;

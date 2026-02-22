@@ -98,3 +98,8 @@ export interface ToolDefinition {
 		strict?: boolean;
 	};
 }
+
+export interface HostedToolDefinition {
+	type: string;
+	[key: string]: unknown;
+}

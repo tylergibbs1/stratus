@@ -25,9 +25,9 @@ import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { SubAgent } from "./subagent";
 import { RunResult } from "./result";
 import { toolToDefinition } from "./tool";
-import type { FunctionTool } from "./tool";
+
 import { getCurrentTrace } from "./tracing";
-import type { AssistantMessage, ChatMessage, ToolCall, ToolDefinition, ToolMessage } from "./types";
+import type { AssistantMessage, ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition, ToolMessage } from "./types";
 
 const DEFAULT_MAX_TURNS = 10;
 
@@ -675,8 +675,8 @@ async function buildFinalResult<TContext, TOutput>(
 	return result;
 }
 
-function buildToolDefs(agent: Agent<any, any>): (ToolDefinition | Record<string, unknown>)[] {
-	const defs: (ToolDefinition | Record<string, unknown>)[] = [];
+function buildToolDefs(agent: Agent<any, any>): (ToolDefinition | HostedToolDefinition)[] {
+	const defs: (ToolDefinition | HostedToolDefinition)[] = [];
 	for (const t of agent.tools) {
 		if (isHostedTool(t)) {
 			defs.push(t.definition);
@@ -737,7 +737,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 	// Build O(1) lookup maps
 	const handoffsByName = new Map(agent.handoffs.map((h) => [h.toolName, h]));
 	const subagentsByName = new Map(agent.subagents.map((sa) => [sa.toolName, sa]));
-	const functionTools = agent.tools.filter(isFunctionTool) as FunctionTool[];
+	const functionTools = agent.tools.filter(isFunctionTool);
 	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
 
 	const results = await Promise.all(

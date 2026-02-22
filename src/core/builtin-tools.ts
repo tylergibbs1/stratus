@@ -1,4 +1,5 @@
 import type { HostedTool } from "./hosted-tool";
+import type { HostedToolDefinition } from "./types";
 
 export interface WebSearchToolConfig {
 	userLocation?: {
@@ -12,7 +13,7 @@ export interface WebSearchToolConfig {
 }
 
 export function webSearchTool(config?: WebSearchToolConfig): HostedTool {
-	const definition: Record<string, unknown> = {
+	const definition: HostedToolDefinition = {
 		type: "web_search_preview",
 	};
 	if (config?.userLocation) {
@@ -53,7 +54,7 @@ export interface McpToolConfig {
 }
 
 export function mcpTool(config: McpToolConfig): HostedTool {
-	const definition: Record<string, unknown> = {
+	const definition: HostedToolDefinition = {
 		type: "mcp",
 		server_label: config.serverLabel,
 		server_url: config.serverUrl,

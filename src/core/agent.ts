@@ -5,7 +5,6 @@ import type { AgentHooks } from "./hooks";
 import type { Model } from "./model";
 import type { SubAgent } from "./subagent";
 import type { AgentTool } from "./hosted-tool";
-import type { FunctionTool } from "./tool";
 import type { ModelSettings, ResponseFormat, ToolUseBehavior } from "./types";
 import { zodToJsonSchema } from "./utils/zod";
 
