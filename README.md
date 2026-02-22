@@ -13,7 +13,10 @@
 [![npm version](https://img.shields.io/npm/v/stratus-sdk)](https://www.npmjs.com/package/stratus-sdk)
 [![CI](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml)
 
-A TypeScript agent framework for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
+A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
+
+- **One framework, two swappable backends** — `AzureChatCompletionsModel` and `AzureResponsesModel` implement the same `Model` interface. Switch with one line, zero agent code changes.
+- **No more 404 config spiral** — explicit `deployment` param, auto-endpoint detection for standard/foundry/full URLs, built-in retry with exponential backoff, and a unified `ContentFilterError` so Azure's inconsistent error shapes don't break your agent loop.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `todo tracking` `cost tracking`
 
