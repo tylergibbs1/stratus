@@ -17,6 +17,10 @@ A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with t
 
 - **One framework, two swappable backends** — `AzureChatCompletionsModel` and `AzureResponsesModel` implement the same `Model` interface. Switch with one line, zero agent code changes.
 - **No more 404 config spiral** — explicit `deployment` param, auto-endpoint detection for standard/foundry/full URLs, built-in retry with exponential backoff, and a unified `ContentFilterError` so Azure's inconsistent error shapes don't break your agent loop.
+- **One `run()` call, entire tool loop** — model calls, parallel tool execution, result appending, and looping back. No manual message array management.
+- **Client-side agent state** — no server-side threads or opaque IDs. Full message history lives locally with `save()`, `resumeSession()`, and `forkSession()` for portable snapshots.
+- **Budget enforcement built in** — set `maxBudgetUsd` and the run stops before you get a surprise bill. Cost estimation accounts for cached and reasoning tokens.
+- **Auth validated at construction** — API key or Entra ID token provider, enforced mutually exclusive in the constructor. No silent misconfiguration that surfaces as a mysterious 401 three calls later.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `todo tracking` `cost tracking`
 
