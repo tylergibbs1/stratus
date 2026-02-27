@@ -2,11 +2,12 @@ import type { z } from "zod";
 import { Agent, type HandoffInput, type Instructions } from "./agent";
 import type { CostEstimator } from "./cost";
 import { StratusError } from "./errors";
-import type { InputGuardrail, OutputGuardrail } from "./guardrails";
-import type { AgentHooks } from "./hooks";
+import type { InputGuardrail, OutputGuardrail, ToolInputGuardrail, ToolOutputGuardrail } from "./guardrails";
+import type { AgentHooks, RunHooks } from "./hooks";
 import type { Model, StreamEvent } from "./model";
 import type { RunResult } from "./result";
 import { stream as coreStream } from "./run";
+import type { ToolErrorFormatter, CallModelInputFilter } from "./run";
 import type { SubAgent } from "./subagent";
 import type { AgentTool } from "./hosted-tool";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
@@ -27,6 +28,12 @@ export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	maxTurns?: number;
 	costEstimator?: CostEstimator;
 	maxBudgetUsd?: number;
+	runHooks?: RunHooks<TContext>;
+	toolErrorFormatter?: ToolErrorFormatter;
+	callModelInputFilter?: CallModelInputFilter<TContext>;
+	toolInputGuardrails?: ToolInputGuardrail<TContext>[];
+	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
+	resetToolChoice?: boolean;
 }
 
 export interface SessionSnapshot {
@@ -43,6 +50,12 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _costEstimator: CostEstimator | undefined;
 	private readonly _maxBudgetUsd: number | undefined;
 	private readonly _hooks: AgentHooks<TContext> | undefined;
+	private readonly _runHooks: RunHooks<TContext> | undefined;
+	private readonly _toolErrorFormatter: ToolErrorFormatter | undefined;
+	private readonly _callModelInputFilter: CallModelInputFilter<TContext> | undefined;
+	private readonly _toolInputGuardrails: ToolInputGuardrail<TContext>[];
+	private readonly _toolOutputGuardrails: ToolOutputGuardrail<TContext>[];
+	private readonly _resetToolChoice: boolean | undefined;
 	private _messages: ChatMessage[] = [];
 	private _resultPromise: Promise<RunResult<TOutput>> | null = null;
 	private _streaming = false;
@@ -59,6 +72,12 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this._costEstimator = config.costEstimator;
 		this._maxBudgetUsd = config.maxBudgetUsd;
 		this._hooks = config.hooks;
+		this._runHooks = config.runHooks;
+		this._toolErrorFormatter = config.toolErrorFormatter;
+		this._callModelInputFilter = config.callModelInputFilter;
+		this._toolInputGuardrails = config.toolInputGuardrails ?? [];
+		this._toolOutputGuardrails = config.toolOutputGuardrails ?? [];
+		this._resetToolChoice = config.resetToolChoice;
 		this._agent = new Agent<TContext, TOutput>({
 			name: "session_agent",
 			model: config.model,
@@ -127,11 +146,11 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this._streaming = true;
 
 		// Fire onSessionStart on first stream
-		if (!this._started && this._hooks?.onSessionStart) {
+		if (!this._started) {
 			this._started = true;
-			await this._hooks.onSessionStart({ context: this._context as TContext });
-		} else {
-			this._started = true;
+			if (this._hooks?.onSessionStart) {
+				await this._hooks.onSessionStart({ context: this._context as TContext });
+			}
 		}
 
 		try {
@@ -144,6 +163,12 @@ export class Session<TContext = unknown, TOutput = undefined> {
 					signal,
 					costEstimator: this._costEstimator,
 					maxBudgetUsd: this._maxBudgetUsd,
+					runHooks: this._runHooks,
+					toolErrorFormatter: this._toolErrorFormatter,
+					callModelInputFilter: this._callModelInputFilter,
+					toolInputGuardrails: this._toolInputGuardrails.length > 0 ? this._toolInputGuardrails : undefined,
+					toolOutputGuardrails: this._toolOutputGuardrails.length > 0 ? this._toolOutputGuardrails : undefined,
+					resetToolChoice: this._resetToolChoice,
 				},
 			);
 

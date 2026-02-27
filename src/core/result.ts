@@ -1,5 +1,6 @@
 import type { Agent } from "./agent";
 import type { FinishReason, UsageInfo } from "./model";
+import type { GuardrailRunResult } from "./guardrails";
 import type { ChatMessage } from "./types";
 
 export interface RunResultOptions<TOutput = undefined> {
@@ -12,6 +13,8 @@ export interface RunResultOptions<TOutput = undefined> {
 	numTurns?: number;
 	totalCostUsd?: number;
 	responseId?: string;
+	inputGuardrailResults?: GuardrailRunResult[];
+	outputGuardrailResults?: GuardrailRunResult[];
 }
 
 export class RunResult<TOutput = undefined> {
@@ -24,6 +27,8 @@ export class RunResult<TOutput = undefined> {
 	readonly numTurns: number;
 	readonly totalCostUsd: number;
 	readonly responseId?: string;
+	readonly inputGuardrailResults: readonly GuardrailRunResult[];
+	readonly outputGuardrailResults: readonly GuardrailRunResult[];
 
 	constructor(opts: RunResultOptions<TOutput>) {
 		this.output = opts.output;
@@ -35,5 +40,12 @@ export class RunResult<TOutput = undefined> {
 		this.numTurns = opts.numTurns ?? 0;
 		this.totalCostUsd = opts.totalCostUsd ?? 0;
 		this.responseId = opts.responseId;
+		this.inputGuardrailResults = opts.inputGuardrailResults ?? [];
+		this.outputGuardrailResults = opts.outputGuardrailResults ?? [];
+	}
+
+	/** Convert the result's messages into a format suitable for chaining as input to another run */
+	toInputList(): ChatMessage[] {
+		return this.messages.filter((m) => m.role !== "system");
 	}
 }

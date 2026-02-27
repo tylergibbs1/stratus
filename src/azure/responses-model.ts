@@ -31,6 +31,22 @@ export interface AzureResponsesModelConfig {
 
 const DEFAULT_API_VERSION = "2025-04-01-preview";
 
+type HostedToolStatus = "in_progress" | "completed" | "searching" | "generating" | "interpreting";
+const HOSTED_TOOL_EVENT_MAP = new Map<string, { toolType: string; status: HostedToolStatus }>([
+	["response.web_search_call.in_progress", { toolType: "web_search", status: "in_progress" }],
+	["response.web_search_call.searching", { toolType: "web_search", status: "searching" }],
+	["response.web_search_call.completed", { toolType: "web_search", status: "completed" }],
+	["response.file_search_call.in_progress", { toolType: "file_search", status: "in_progress" }],
+	["response.file_search_call.searching", { toolType: "file_search", status: "searching" }],
+	["response.file_search_call.completed", { toolType: "file_search", status: "completed" }],
+	["response.code_interpreter_call.in_progress", { toolType: "code_interpreter", status: "in_progress" }],
+	["response.code_interpreter_call.interpreting", { toolType: "code_interpreter", status: "interpreting" }],
+	["response.code_interpreter_call.completed", { toolType: "code_interpreter", status: "completed" }],
+	["response.image_generation_call.in_progress", { toolType: "image_generation", status: "in_progress" }],
+	["response.image_generation_call.generating", { toolType: "image_generation", status: "generating" }],
+	["response.image_generation_call.completed", { toolType: "image_generation", status: "completed" }],
+]);
+
 export class AzureResponsesModel implements Model {
 	private readonly url: string;
 	private readonly apiKey?: string;
@@ -149,6 +165,25 @@ export class AzureResponsesModel implements Model {
 					}
 					break;
 				}
+				// Hosted tool streaming events
+				case "response.web_search_call.in_progress":
+				case "response.web_search_call.searching":
+				case "response.web_search_call.completed":
+				case "response.file_search_call.in_progress":
+				case "response.file_search_call.searching":
+				case "response.file_search_call.completed":
+				case "response.code_interpreter_call.in_progress":
+				case "response.code_interpreter_call.interpreting":
+				case "response.code_interpreter_call.completed":
+				case "response.image_generation_call.in_progress":
+				case "response.image_generation_call.generating":
+				case "response.image_generation_call.completed": {
+					const mapped = HOSTED_TOOL_EVENT_MAP.get(event.type);
+					if (mapped) {
+						yield { type: "hosted_tool_call", toolType: mapped.toolType, status: mapped.status };
+					}
+					break;
+				}
 				case "response.completed": {
 					const resp = event.response;
 					if (resp?.id) {
@@ -169,6 +204,29 @@ export class AzureResponsesModel implements Model {
 					}
 					finishReason = mapStatus(resp?.status);
 					break;
+				}
+				case "response.failed": {
+					const errorMsg = event.response?.error?.message
+						?? "Response failed";
+					throw new ModelError(
+						`Azure API response failed: ${errorMsg}`,
+						{ status: 200 },
+					);
+				}
+				case "error": {
+					const err = event.error;
+					const errorType = err?.type ?? "unknown";
+					const errorMsg = err?.message ?? "Unknown error";
+					if (errorType === "too_many_requests") {
+						throw new ModelError(
+							`Azure API rate limited (SSE): ${errorMsg}`,
+							{ status: 429 },
+						);
+					}
+					throw new ModelError(
+						`Azure API stream error (${errorType}): ${errorMsg}`,
+						{ status: 200 },
+					);
 				}
 			}
 		}
@@ -195,9 +253,11 @@ export class AzureResponsesModel implements Model {
 		request: ModelRequest,
 		stream: boolean,
 	): Record<string, unknown> {
+		// ModelSettings.store overrides config-level store
+		const effectiveStore = request.modelSettings?.store ?? this.store;
 		const body: Record<string, unknown> = {
 			model: this.deployment,
-			store: this.store,
+			store: effectiveStore,
 		};
 
 		const { instructions, input } = convertMessages(request.messages);
@@ -227,7 +287,7 @@ export class AzureResponsesModel implements Model {
 		}
 
 		// Only send previous_response_id when store is enabled (API needs to persist responses)
-		if (this.store && request.previousResponseId) {
+		if (effectiveStore && request.previousResponseId) {
 			body.previous_response_id = request.previousResponseId;
 		}
 
@@ -235,15 +295,25 @@ export class AzureResponsesModel implements Model {
 		if (s) {
 			if (s.temperature !== undefined) body.temperature = s.temperature;
 			if (s.topP !== undefined) body.top_p = s.topP;
-			if (s.maxTokens !== undefined) body.max_output_tokens = s.maxTokens;
-			if (s.maxCompletionTokens !== undefined)
+			if (s.maxCompletionTokens !== undefined) {
 				body.max_output_tokens = s.maxCompletionTokens;
+			} else if (s.maxTokens !== undefined) {
+				body.max_output_tokens = s.maxTokens;
+			}
 			if (s.toolChoice !== undefined) body.tool_choice = convertToolChoice(s.toolChoice);
 			if (s.parallelToolCalls !== undefined) body.parallel_tool_calls = s.parallelToolCalls;
-			if (s.reasoningEffort !== undefined)
-				body.reasoning = { effort: s.reasoningEffort };
+			if (s.reasoningEffort !== undefined || s.reasoningSummary !== undefined) {
+				const reasoning: Record<string, unknown> = {};
+				if (s.reasoningEffort !== undefined) reasoning.effort = s.reasoningEffort;
+				if (s.reasoningSummary !== undefined) reasoning.summary = s.reasoningSummary;
+				body.reasoning = reasoning;
+			}
 			if (s.promptCacheKey !== undefined)
 				body.prompt_cache_key = s.promptCacheKey;
+			if (s.truncation !== undefined) body.truncation = s.truncation;
+			if (s.store !== undefined) body.store = s.store;
+			if (s.metadata !== undefined) body.metadata = s.metadata;
+			if (s.user !== undefined) body.user = s.user;
 		}
 
 		return body;
@@ -569,4 +639,20 @@ type ResponsesStreamEvent =
 	| { type: "response.output_item.added"; item?: ResponsesStreamItem }
 	| { type: "response.function_call_arguments.delta"; item_id?: string; delta?: string }
 	| { type: "response.output_item.done"; item?: ResponsesStreamItem }
-	| { type: "response.completed"; response?: { id?: string; status?: string; usage?: ResponsesUsage } };
+	| { type: "response.completed"; response?: { id?: string; status?: string; usage?: ResponsesUsage } }
+	// Hosted tool streaming events
+	| { type: "response.web_search_call.in_progress" }
+	| { type: "response.web_search_call.searching" }
+	| { type: "response.web_search_call.completed" }
+	| { type: "response.file_search_call.in_progress" }
+	| { type: "response.file_search_call.searching" }
+	| { type: "response.file_search_call.completed" }
+	| { type: "response.code_interpreter_call.in_progress" }
+	| { type: "response.code_interpreter_call.interpreting" }
+	| { type: "response.code_interpreter_call.completed" }
+	| { type: "response.image_generation_call.in_progress" }
+	| { type: "response.image_generation_call.generating" }
+	| { type: "response.image_generation_call.completed" }
+	// Error / failure events (e.g. SSE-level 429)
+	| { type: "response.failed"; response?: { id?: string; status?: string; error?: { message?: string; type?: string; code?: string } } }
+	| { type: "error"; error?: { type?: string; code?: string; message?: string } };

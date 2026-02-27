@@ -7,14 +7,26 @@ import {
 	OutputParseError,
 	RunAbortedError,
 	StratusError,
+	ToolTimeoutError,
 } from "./errors";
-import { runInputGuardrails, runOutputGuardrails } from "./guardrails";
+import {
+	runInputGuardrails,
+	runOutputGuardrails,
+	runToolInputGuardrails,
+	runToolOutputGuardrails,
+} from "./guardrails";
+import type {
+	GuardrailRunResult,
+	ToolInputGuardrail,
+	ToolOutputGuardrail,
+} from "./guardrails";
 import type {
 	AfterToolCallHook,
 	BeforeToolCallHook,
 	HandoffDecision,
 	MatchedAfterToolCallHook,
 	MatchedToolCallHook,
+	RunHooks,
 	ToolCallDecision,
 	ToolMatcher,
 } from "./hooks";
@@ -114,13 +126,79 @@ async function resolveAfterToolCallHook<TContext>(
 	}
 }
 
-export interface RunOptions<TContext> {
+/** Check if a tool/handoff isEnabled field resolves to true */
+async function checkEnabled<TContext>(
+	isEnabled: boolean | ((context: TContext) => boolean | Promise<boolean>) | undefined,
+	context: TContext,
+): Promise<boolean> {
+	if (isEnabled === undefined) return true;
+	if (typeof isEnabled === "boolean") return isEnabled;
+	return isEnabled(context);
+}
+
+/** Execute a tool with optional timeout */
+async function executeWithTimeout<T>(
+	fn: () => Promise<T> | T,
+	timeout: number | undefined,
+	toolName: string,
+): Promise<T> {
+	if (!timeout) return fn();
+
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new ToolTimeoutError(toolName, timeout));
+		}, timeout);
+
+		Promise.resolve(fn())
+			.then((result) => {
+				clearTimeout(timer);
+				resolve(result);
+			})
+			.catch((error) => {
+				clearTimeout(timer);
+				reject(error);
+			});
+	});
+}
+
+export type ToolErrorFormatter = (toolName: string, error: unknown) => string;
+
+export type CallModelInputFilter<TContext> = (params: {
+	agent: Agent<TContext, any>;
+	request: ModelRequest;
+	context: TContext;
+}) => ModelRequest;
+
+export type MaxTurnsErrorHandler<TContext, TOutput> = (params: {
+	agent: Agent<TContext, any>;
+	messages: ChatMessage[];
+	context: TContext;
+	maxTurns: number;
+}) => RunResult<TOutput> | Promise<RunResult<TOutput>>;
+
+export interface RunOptions<TContext, TOutput = undefined> {
 	context?: TContext;
 	model?: Model;
 	maxTurns?: number;
 	signal?: AbortSignal;
 	costEstimator?: CostEstimator;
 	maxBudgetUsd?: number;
+	/** Run-level hooks that fire across all agents */
+	runHooks?: RunHooks<TContext>;
+	/** Custom formatter for tool error messages sent to the LLM */
+	toolErrorFormatter?: ToolErrorFormatter;
+	/** Transform model requests before they're sent to the API */
+	callModelInputFilter?: CallModelInputFilter<TContext>;
+	/** Handle max_turns gracefully instead of throwing */
+	errorHandlers?: {
+		maxTurns?: MaxTurnsErrorHandler<TContext, TOutput>;
+	};
+	/** Tool guardrails that run before tool execution */
+	toolInputGuardrails?: ToolInputGuardrail<TContext>[];
+	/** Tool guardrails that run after tool execution */
+	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
+	/** Reset tool_choice to "auto" after the first LLM call to prevent infinite loops */
+	resetToolChoice?: boolean;
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -129,7 +207,7 @@ function checkAborted(signal?: AbortSignal): void {
 	}
 }
 
-function validateBudgetOptions(options?: RunOptions<any>): void {
+function validateBudgetOptions(options?: RunOptions<any, any>): void {
 	if (options?.maxBudgetUsd !== undefined && !options.costEstimator) {
 		throw new StratusError("maxBudgetUsd requires a costEstimator to be provided");
 	}
@@ -151,10 +229,19 @@ function checkBudget(ctx: RunContext<any>, maxBudgetUsd: number | undefined): vo
 	}
 }
 
+function formatToolError(
+	toolName: string,
+	error: unknown,
+	formatter?: ToolErrorFormatter,
+): string {
+	if (formatter) return formatter(toolName, error);
+	return `Error executing tool "${toolName}": ${getErrorMessage(error)}`;
+}
+
 export async function run<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
-	options?: RunOptions<TContext>,
+	options?: RunOptions<TContext, TOutput>,
 ): Promise<RunResult<TOutput>> {
 	validateBudgetOptions(options);
 
@@ -171,6 +258,11 @@ export async function run<TContext, TOutput = undefined>(
 	const maxBudgetUsd = options?.maxBudgetUsd;
 	const ctx = new RunContext(options?.context as TContext);
 	const trace = getCurrentTrace();
+	const runHooks = options?.runHooks;
+	const toolErrorFmt = options?.toolErrorFormatter;
+	const callModelInputFilter = options?.callModelInputFilter;
+	const toolInputGuardrails = options?.toolInputGuardrails ?? [];
+	const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
 
 	// Fire beforeRun hook on the entry agent
 	const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -179,16 +271,17 @@ export async function run<TContext, TOutput = undefined>(
 	}
 
 	// Run input guardrails on the starting agent
+	let inputGuardrailResults: GuardrailRunResult[] = [];
 	if (agent.inputGuardrails.length > 0) {
 		if (trace) {
 			const span = trace.startSpan("input_guardrails", "guardrail");
 			try {
-				await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+				inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
 			} finally {
 				trace.endSpan(span);
 			}
 		} else {
-			await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+			inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
 		}
 	}
 
@@ -210,17 +303,37 @@ export async function run<TContext, TOutput = undefined>(
 	let lastFinishReason: FinishReason | undefined;
 	let lastResponseId: string | undefined;
 
+	// Fire run-level onAgentStart
+	if (runHooks?.onAgentStart) {
+		await runHooks.onAgentStart({ agent: currentAgent, context: ctx.context });
+	}
+
 	for (let turn = 0; turn < maxTurns; turn++) {
 		checkAborted(signal);
 
-		const toolDefs = buildToolDefs(currentAgent);
-		const request: ModelRequest = {
+		const toolDefs = await buildToolDefs(currentAgent, ctx.context);
+		let request: ModelRequest = {
 			messages,
 			tools: toolDefs.length > 0 ? toolDefs : undefined,
-			modelSettings: currentAgent.modelSettings,
+			modelSettings: currentAgent.modelSettings
+				? applyResetToolChoice(currentAgent.modelSettings, turn, options?.resetToolChoice)
+				: undefined,
 			responseFormat: currentAgent.getResponseFormat(),
 			previousResponseId: lastResponseId,
 		};
+
+		// Apply callModelInputFilter
+		if (callModelInputFilter) {
+			request = callModelInputFilter({ agent: currentAgent, request, context: ctx.context });
+		}
+
+		// Fire onLlmStart hooks
+		if (currentAgent.hooks.onLlmStart) {
+			await currentAgent.hooks.onLlmStart({ agent: currentAgent, messages, context: ctx.context });
+		}
+		if (runHooks?.onLlmStart) {
+			await runHooks.onLlmStart({ agent: currentAgent, request, context: ctx.context });
+		}
 
 		let response: ModelResponse;
 		if (trace) {
@@ -240,6 +353,15 @@ export async function run<TContext, TOutput = undefined>(
 			}
 		} else {
 			response = await model.getResponse(request, { signal });
+		}
+
+		// Fire onLlmEnd hooks
+		const llmEndInfo = { content: response.content, toolCallCount: response.toolCalls.length };
+		if (currentAgent.hooks.onLlmEnd) {
+			await currentAgent.hooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
+		}
+		if (runHooks?.onLlmEnd) {
+			await runHooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
 		}
 
 		checkAborted(signal);
@@ -272,7 +394,15 @@ export async function run<TContext, TOutput = undefined>(
 		messages.push(assistantMsg);
 
 		if (response.toolCalls.length === 0) {
-			return buildFinalResult(agent, currentAgent, messages, ctx, trace, lastFinishReason, lastResponseId);
+			// Fire run-level onAgentEnd
+			if (runHooks?.onAgentEnd) {
+				await runHooks.onAgentEnd({ agent: currentAgent, output: response.content ?? "", context: ctx.context });
+			}
+			return buildFinalResult(
+				agent, currentAgent, messages, ctx, trace,
+				lastFinishReason, lastResponseId,
+				inputGuardrailResults,
+			);
 		}
 
 		const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
@@ -281,11 +411,15 @@ export async function run<TContext, TOutput = undefined>(
 			response.toolCalls,
 			trace,
 			signal,
+			toolErrorFmt,
+			runHooks,
+			toolInputGuardrails,
+			toolOutputGuardrails,
 		);
 		messages.push(...toolMessages);
 
 		// Check toolUseBehavior — should we stop instead of calling the LLM again?
-		if (shouldStopAfterToolCalls(currentAgent, response.toolCalls)) {
+		if (await shouldStopAfterToolCalls(currentAgent, response.toolCalls, toolMessages)) {
 			const toolOutput = toolMessages.map((m) => m.content).join("\n");
 			return new RunResult<TOutput>({
 				output: toolOutput,
@@ -296,6 +430,7 @@ export async function run<TContext, TOutput = undefined>(
 				numTurns: ctx.numTurns,
 				totalCostUsd: ctx.totalCostUsd,
 				responseId: lastResponseId,
+				inputGuardrailResults,
 			});
 		}
 
@@ -327,6 +462,16 @@ export async function run<TContext, TOutput = undefined>(
 			}
 
 			if (allowHandoff) {
+				// Fire run-level onAgentEnd for current agent
+				if (runHooks?.onAgentEnd) {
+					await runHooks.onAgentEnd({ agent: currentAgent, output: response.content ?? "", context: ctx.context });
+				}
+
+				// Fire run-level onHandoff
+				if (runHooks?.onHandoff) {
+					await runHooks.onHandoff({ fromAgent: currentAgent, toAgent: handoffAgent, context: ctx.context });
+				}
+
 				if (trace) {
 					const span = trace.startSpan(
 						`handoff:${currentAgent.name}->${handoffAgent.name}`,
@@ -334,6 +479,16 @@ export async function run<TContext, TOutput = undefined>(
 						{ fromAgent: currentAgent.name, toAgent: handoffAgent.name },
 					);
 					trace.endSpan(span);
+				}
+
+				// Apply handoff inputFilter if present
+				const matchedHandoff = currentAgent.handoffs.find(
+					(h) => h.agent === handoffAgent || h.agent.name === handoffAgent.name,
+				);
+				if (matchedHandoff?.inputFilter) {
+					const filtered = matchedHandoff.inputFilter({ history: [...messages] });
+					messages.length = 0;
+					messages.push(...filtered);
 				}
 
 				currentAgent = handoffAgent;
@@ -350,6 +505,11 @@ export async function run<TContext, TOutput = undefined>(
 				} else if (systemIdx >= 0) {
 					messages.splice(systemIdx, 1);
 				}
+
+				// Fire run-level onAgentStart for new agent
+				if (runHooks?.onAgentStart) {
+					await runHooks.onAgentStart({ agent: currentAgent, context: ctx.context });
+				}
 			}
 		}
 	}
@@ -363,10 +523,20 @@ export async function run<TContext, TOutput = undefined>(
 		});
 	}
 
+	// Check for error handler
+	if (options?.errorHandlers?.maxTurns) {
+		return options.errorHandlers.maxTurns({
+			agent: currentAgent,
+			messages,
+			context: ctx.context,
+			maxTurns,
+		});
+	}
+
 	throw new MaxTurnsExceededError(maxTurns);
 }
 
-export interface StreamOptions<TContext> extends RunOptions<TContext> {}
+export interface StreamOptions<TContext, TOutput = undefined> extends RunOptions<TContext, TOutput> {}
 
 export interface StreamedRunResult<TOutput = undefined> {
 	stream: AsyncGenerator<StreamEvent>;
@@ -376,7 +546,7 @@ export interface StreamedRunResult<TOutput = undefined> {
 export function stream<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
-	options?: StreamOptions<TContext>,
+	options?: StreamOptions<TContext, TOutput>,
 ): StreamedRunResult<TOutput> {
 	let resolveResult: (result: RunResult<TOutput>) => void;
 	let rejectResult: (error: unknown) => void;
@@ -393,7 +563,7 @@ export function stream<TContext, TOutput = undefined>(
 async function* streamInternal<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
-	options: StreamOptions<TContext> | undefined,
+	options: StreamOptions<TContext, TOutput> | undefined,
 	resolveResult: (result: RunResult<TOutput>) => void,
 	rejectResult: (error: unknown) => void,
 ): AsyncGenerator<StreamEvent> {
@@ -413,6 +583,11 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		const maxBudgetUsd = options?.maxBudgetUsd;
 		const ctx = new RunContext(options?.context as TContext);
 		const trace = getCurrentTrace();
+		const runHooks = options?.runHooks;
+		const toolErrorFmt = options?.toolErrorFormatter;
+		const callModelInputFilter = options?.callModelInputFilter;
+		const toolInputGuardrails = options?.toolInputGuardrails ?? [];
+		const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
 
 		// Fire beforeRun hook on the entry agent
 		const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -421,16 +596,17 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		}
 
 		// Run input guardrails on the starting agent
+		let inputGuardrailResults: GuardrailRunResult[] = [];
 		if (agent.inputGuardrails.length > 0) {
 			if (trace) {
 				const span = trace.startSpan("input_guardrails", "guardrail");
 				try {
-					await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+					inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
 				} finally {
 					trace.endSpan(span);
 				}
 			} else {
-				await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+				inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
 			}
 		}
 
@@ -452,17 +628,37 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		let lastFinishReason: FinishReason | undefined;
 		let lastResponseId: string | undefined;
 
+		// Fire run-level onAgentStart
+		if (runHooks?.onAgentStart) {
+			await runHooks.onAgentStart({ agent: currentAgent, context: ctx.context });
+		}
+
 		for (let turn = 0; turn < maxTurns; turn++) {
 			checkAborted(signal);
 
-			const toolDefs = buildToolDefs(currentAgent);
-			const request: ModelRequest = {
+			const toolDefs = await buildToolDefs(currentAgent, ctx.context);
+			let request: ModelRequest = {
 				messages,
 				tools: toolDefs.length > 0 ? toolDefs : undefined,
-				modelSettings: currentAgent.modelSettings,
+				modelSettings: currentAgent.modelSettings
+					? applyResetToolChoice(currentAgent.modelSettings, turn, options?.resetToolChoice)
+					: undefined,
 				responseFormat: currentAgent.getResponseFormat(),
 				previousResponseId: lastResponseId,
 			};
+
+			// Apply callModelInputFilter
+			if (callModelInputFilter) {
+				request = callModelInputFilter({ agent: currentAgent, request, context: ctx.context });
+			}
+
+			// Fire onLlmStart hooks
+			if (currentAgent.hooks.onLlmStart) {
+				await currentAgent.hooks.onLlmStart({ agent: currentAgent, messages, context: ctx.context });
+			}
+			if (runHooks?.onLlmStart) {
+				await runHooks.onLlmStart({ agent: currentAgent, request, context: ctx.context });
+			}
 
 			let finalResponse: ModelResponse | undefined;
 			let gotDone = false;
@@ -477,6 +673,15 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 			if (!gotDone) {
 				throw new StratusError("Stream ended without a done event");
+			}
+
+			// Fire onLlmEnd hooks
+			const llmEndInfo = { content: finalResponse!.content, toolCallCount: finalResponse!.toolCalls.length };
+			if (currentAgent.hooks.onLlmEnd) {
+				await currentAgent.hooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
+			}
+			if (runHooks?.onLlmEnd) {
+				await runHooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
 			}
 
 			checkAborted(signal);
@@ -511,14 +716,13 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			messages.push(assistantMsg);
 
 			if (finalResponse!.toolCalls.length === 0) {
+				if (runHooks?.onAgentEnd) {
+					await runHooks.onAgentEnd({ agent: currentAgent, output: finalResponse!.content ?? "", context: ctx.context });
+				}
 				const result = await buildFinalResult(
-					agent,
-					currentAgent,
-					messages,
-					ctx,
-					trace,
-					lastFinishReason,
-					lastResponseId,
+					agent, currentAgent, messages, ctx, trace,
+					lastFinishReason, lastResponseId,
+					inputGuardrailResults,
 				);
 				resolveResult(result);
 				return;
@@ -530,11 +734,15 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				finalResponse!.toolCalls,
 				trace,
 				signal,
+				toolErrorFmt,
+				runHooks,
+				toolInputGuardrails,
+				toolOutputGuardrails,
 			);
 			messages.push(...toolMessages);
 
 			// Check toolUseBehavior
-			if (shouldStopAfterToolCalls(currentAgent, finalResponse!.toolCalls)) {
+			if (await shouldStopAfterToolCalls(currentAgent, finalResponse!.toolCalls, toolMessages)) {
 				const toolOutput = toolMessages.map((m) => m.content).join("\n");
 				resolveResult(
 					new RunResult<TOutput>({
@@ -546,6 +754,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 						numTurns: ctx.numTurns,
 						totalCostUsd: ctx.totalCostUsd,
 						responseId: lastResponseId,
+						inputGuardrailResults,
 					}),
 				);
 				return;
@@ -577,6 +786,23 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				}
 
 				if (allowHandoff) {
+					if (runHooks?.onAgentEnd) {
+						await runHooks.onAgentEnd({ agent: currentAgent, output: finalResponse!.content ?? "", context: ctx.context });
+					}
+					if (runHooks?.onHandoff) {
+						await runHooks.onHandoff({ fromAgent: currentAgent, toAgent: handoffAgent, context: ctx.context });
+					}
+
+					// Apply handoff inputFilter if present
+					const matchedHandoff = currentAgent.handoffs.find(
+						(h) => h.agent === handoffAgent || h.agent.name === handoffAgent.name,
+					);
+					if (matchedHandoff?.inputFilter) {
+						const filtered = matchedHandoff.inputFilter({ history: [...messages] });
+						messages.length = 0;
+						messages.push(...filtered);
+					}
+
 					currentAgent = handoffAgent;
 
 					const newSystemPrompt = await currentAgent.getSystemPrompt(ctx.context);
@@ -590,6 +816,10 @@ async function* streamInternal<TContext, TOutput = undefined>(
 					} else if (systemIdx >= 0) {
 						messages.splice(systemIdx, 1);
 					}
+
+					if (runHooks?.onAgentStart) {
+						await runHooks.onAgentStart({ agent: currentAgent, context: ctx.context });
+					}
 				}
 			}
 		}
@@ -601,6 +831,19 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				context: ctx.context,
 				reason: "max_turns",
 			});
+		}
+
+		// Check for error handler
+		if (options?.errorHandlers?.maxTurns) {
+			resolveResult(
+				await options.errorHandlers.maxTurns({
+					agent: currentAgent,
+					messages,
+					context: ctx.context,
+					maxTurns,
+				}),
+			);
+			return;
 		}
 
 		throw new MaxTurnsExceededError(maxTurns);
@@ -618,17 +861,19 @@ async function buildFinalResult<TContext, TOutput>(
 	trace: ReturnType<typeof getCurrentTrace>,
 	finishReason?: FinishReason,
 	responseId?: string,
+	inputGuardrailResults?: GuardrailRunResult[],
 ): Promise<RunResult<TOutput>> {
 	const lastMessage = messages[messages.length - 1];
 	const rawOutput =
 		lastMessage && lastMessage.role === "assistant" ? (lastMessage.content ?? "") : "";
 
 	// Run output guardrails on the current (possibly handed-off) agent
+	let outputGuardrailResults: GuardrailRunResult[] = [];
 	if (currentAgent.outputGuardrails.length > 0) {
 		if (trace) {
 			const span = trace.startSpan("output_guardrails", "guardrail");
 			try {
-				await runOutputGuardrails(
+				outputGuardrailResults = await runOutputGuardrails(
 					currentAgent.outputGuardrails,
 					rawOutput,
 					ctx.context,
@@ -637,7 +882,7 @@ async function buildFinalResult<TContext, TOutput>(
 				trace.endSpan(span);
 			}
 		} else {
-			await runOutputGuardrails(currentAgent.outputGuardrails, rawOutput, ctx.context);
+			outputGuardrailResults = await runOutputGuardrails(currentAgent.outputGuardrails, rawOutput, ctx.context);
 		}
 	}
 
@@ -665,6 +910,8 @@ async function buildFinalResult<TContext, TOutput>(
 		numTurns: ctx.numTurns,
 		totalCostUsd: ctx.totalCostUsd,
 		responseId,
+		inputGuardrailResults,
+		outputGuardrailResults,
 	});
 
 	// Fire afterRun hook on the entry agent
@@ -675,12 +922,18 @@ async function buildFinalResult<TContext, TOutput>(
 	return result;
 }
 
-function buildToolDefs(agent: Agent<any, any>): (ToolDefinition | HostedToolDefinition)[] {
+async function buildToolDefs(
+	agent: Agent<any, any>,
+	context: any,
+): Promise<(ToolDefinition | HostedToolDefinition)[]> {
 	const defs: (ToolDefinition | HostedToolDefinition)[] = [];
+
 	for (const t of agent.tools) {
 		if (isHostedTool(t)) {
 			defs.push(t.definition);
 		} else {
+			// Check isEnabled for function tools
+			if (!(await checkEnabled(t.isEnabled, context))) continue;
 			defs.push(toolToDefinition(t));
 		}
 	}
@@ -688,6 +941,8 @@ function buildToolDefs(agent: Agent<any, any>): (ToolDefinition | HostedToolDefi
 		defs.push(subagentToDefinition(sa));
 	}
 	for (const h of agent.handoffs) {
+		// Check isEnabled for handoffs
+		if (!(await checkEnabled(h.isEnabled, context))) continue;
 		defs.push(handoffToDefinition(h));
 	}
 	return defs;
@@ -710,19 +965,40 @@ function extractUserText(messages: ChatMessage[]): string {
 	return texts.join("\n");
 }
 
-function shouldStopAfterToolCalls(
+async function shouldStopAfterToolCalls(
 	agent: Agent<any, any>,
 	toolCalls: { function: { name: string } }[],
-): boolean {
-	if (agent.toolUseBehavior === "run_llm_again") return false;
-	if (agent.toolUseBehavior === "stop_on_first_tool") return true;
-	if ("stopAtToolNames" in agent.toolUseBehavior) {
-		const stopNames = new Set(
-			(agent.toolUseBehavior as { stopAtToolNames: string[] }).stopAtToolNames,
-		);
+	toolMessages: ToolMessage[],
+): Promise<boolean> {
+	const behavior = agent.toolUseBehavior;
+	if (behavior === "run_llm_again") return false;
+	if (behavior === "stop_on_first_tool") return true;
+	if (typeof behavior === "function") {
+		// Custom function variant
+		const results = toolCalls.map((tc, i) => ({
+			toolName: tc.function.name,
+			result: toolMessages[i]?.content ?? "",
+		}));
+		return behavior(results);
+	}
+	if (typeof behavior === "object" && "stopAtToolNames" in behavior) {
+		const stopNames = new Set(behavior.stopAtToolNames);
 		return toolCalls.some((tc) => stopNames.has(tc.function.name));
 	}
 	return false;
+}
+
+function applyResetToolChoice(
+	settings: import("./types").ModelSettings,
+	turn: number,
+	resetToolChoice?: boolean,
+): import("./types").ModelSettings {
+	if (!resetToolChoice || turn === 0) return settings;
+	// After the first turn, reset tool_choice to "auto" to prevent infinite loops
+	if (settings.toolChoice && settings.toolChoice !== "auto") {
+		return { ...settings, toolChoice: "auto" };
+	}
+	return settings;
 }
 
 async function executeToolCallsWithHandoffs<TContext>(
@@ -731,6 +1007,10 @@ async function executeToolCallsWithHandoffs<TContext>(
 	toolCalls: { id: string; function: { name: string; arguments: string } }[],
 	trace: ReturnType<typeof getCurrentTrace>,
 	signal?: AbortSignal,
+	toolErrorFmt?: ToolErrorFormatter,
+	runHooks?: RunHooks<TContext>,
+	toolInputGuardrails?: ToolInputGuardrail<TContext>[],
+	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[],
 ): Promise<{ toolMessages: ToolMessage[]; handoffAgent?: Agent<TContext, any> }> {
 	let handoffAgent: Agent<TContext, any> | undefined;
 
@@ -789,6 +1069,11 @@ async function executeToolCallsWithHandoffs<TContext>(
 						});
 					}
 
+					// Fire run-level onToolStart
+					if (runHooks?.onToolStart) {
+						await runHooks.onToolStart({ agent, toolName: tcName, context: ctx.context });
+					}
+
 					let result: string;
 					if (trace) {
 						const span = trace.startSpan(
@@ -815,6 +1100,11 @@ async function executeToolCallsWithHandoffs<TContext>(
 						});
 					}
 
+					// Fire run-level onToolEnd
+					if (runHooks?.onToolEnd) {
+						await runHooks.onToolEnd({ agent, toolName: tcName, result, context: ctx.context });
+					}
+
 					await resolveAfterToolCallHook(agent.hooks.afterToolCall, {
 						agent,
 						toolCall: fullToolCall,
@@ -831,7 +1121,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 					return {
 						role: "tool" as const,
 						tool_call_id: tc.id,
-						content: `Error executing sub-agent "${matchedSubagent.agent.name}": ${getErrorMessage(error)}`,
+						content: formatToolError(matchedSubagent.agent.name, error, toolErrorFmt),
 					};
 				}
 			}
@@ -868,6 +1158,29 @@ async function executeToolCallsWithHandoffs<TContext>(
 					params = decision.modifiedParams;
 				}
 
+				// Run tool input guardrails
+				if (toolInputGuardrails && toolInputGuardrails.length > 0) {
+					const guardrailResults = await runToolInputGuardrails(
+						toolInputGuardrails,
+						tcName,
+						params,
+						ctx.context,
+					);
+					const tripped = guardrailResults.find((r) => r.result.tripwireTriggered);
+					if (tripped) {
+						return {
+							role: "tool" as const,
+							tool_call_id: tc.id,
+							content: `Tool input guardrail "${tripped.guardrailName}" blocked execution of "${tcName}"`,
+						};
+					}
+				}
+
+				// Fire run-level onToolStart
+				if (runHooks?.onToolStart) {
+					await runHooks.onToolStart({ agent, toolName: tcName, context: ctx.context });
+				}
+
 				checkAborted(signal);
 				let result: string;
 				if (trace) {
@@ -875,12 +1188,39 @@ async function executeToolCallsWithHandoffs<TContext>(
 						toolName: tcName,
 					});
 					try {
-						result = await tool.execute(ctx.context, params, { signal });
+						result = await executeWithTimeout(
+							() => tool.execute(ctx.context, params, { signal }),
+							tool.timeout,
+							tcName,
+						);
 					} finally {
 						trace.endSpan(span);
 					}
 				} else {
-					result = await tool.execute(ctx.context, params, { signal });
+					result = await executeWithTimeout(
+						() => tool.execute(ctx.context, params, { signal }),
+						tool.timeout,
+						tcName,
+					);
+				}
+
+				// Run tool output guardrails
+				if (toolOutputGuardrails && toolOutputGuardrails.length > 0) {
+					const guardrailResults = await runToolOutputGuardrails(
+						toolOutputGuardrails,
+						tcName,
+						result,
+						ctx.context,
+					);
+					const tripped = guardrailResults.find((r) => r.result.tripwireTriggered);
+					if (tripped) {
+						result = `Tool output guardrail "${tripped.guardrailName}" flagged the output of "${tcName}"`;
+					}
+				}
+
+				// Fire run-level onToolEnd
+				if (runHooks?.onToolEnd) {
+					await runHooks.onToolEnd({ agent, toolName: tcName, result, context: ctx.context });
 				}
 
 				// Fire afterToolCall hook
@@ -900,7 +1240,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 				return {
 					role: "tool" as const,
 					tool_call_id: tc.id,
-					content: `Error executing tool "${tcName}": ${getErrorMessage(error)}`,
+					content: formatToolError(tcName, error, toolErrorFmt),
 				};
 			}
 		}),

@@ -57,9 +57,14 @@ export type ToolChoice =
 export type ToolUseBehavior =
 	| "run_llm_again"
 	| "stop_on_first_tool"
-	| { stopAtToolNames: string[] };
+	| { stopAtToolNames: string[] }
+	| ((toolResults: { toolName: string; result: string }[]) => boolean | Promise<boolean>);
 
 export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export type ReasoningSummary = "auto" | "concise" | "detailed";
+
+export type Truncation = "auto" | "disabled";
 
 export interface ModelSettings {
 	temperature?: number;
@@ -73,7 +78,14 @@ export interface ModelSettings {
 	parallelToolCalls?: boolean;
 	seed?: number;
 	reasoningEffort?: ReasoningEffort;
+	reasoningSummary?: ReasoningSummary;
 	promptCacheKey?: string;
+	truncation?: Truncation;
+	store?: boolean;
+	metadata?: Record<string, string>;
+	user?: string;
+	logprobs?: boolean;
+	topLogprobs?: number;
 }
 
 export type ResponseFormat =

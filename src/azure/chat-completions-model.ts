@@ -205,6 +205,11 @@ export class AzureChatCompletionsModel implements Model {
 			if (s.seed !== undefined) body.seed = s.seed;
 			if (s.reasoningEffort !== undefined) body.reasoning_effort = s.reasoningEffort;
 			if (s.promptCacheKey !== undefined) body.prompt_cache_key = s.promptCacheKey;
+			if (s.store !== undefined) body.store = s.store;
+			if (s.metadata !== undefined) body.metadata = s.metadata;
+			if (s.user !== undefined) body.user = s.user;
+			if (s.logprobs !== undefined) body.logprobs = s.logprobs;
+			if (s.topLogprobs !== undefined) body.top_logprobs = s.topLogprobs;
 		}
 
 		return body;
@@ -351,15 +356,15 @@ function serializeMessage(msg: ChatMessage): Record<string, unknown> {
 interface AzureChatResponse {
 	choices: {
 		message: {
-			role: string;
+			role: "assistant";
 			content: string | null;
 			tool_calls?: {
 				id: string;
-				type: string;
+				type: "function";
 				function: { name: string; arguments: string };
 			}[];
 		};
-		finish_reason: string;
+		finish_reason: FinishReason | string;
 	}[];
 	usage?: {
 		prompt_tokens: number;
@@ -384,19 +389,19 @@ interface AzureErrorResponse {
 interface AzureStreamChunk {
 	choices?: {
 		delta?: {
-			role?: string;
+			role?: "assistant";
 			content?: string;
 			tool_calls?: {
 				index: number;
 				id?: string;
-				type?: string;
+				type?: "function";
 				function?: {
 					name?: string;
 					arguments?: string;
 				};
 			}[];
 		};
-		finish_reason?: string;
+		finish_reason?: FinishReason | string;
 	}[];
 	usage?: {
 		prompt_tokens: number;

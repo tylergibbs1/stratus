@@ -5,7 +5,14 @@ export { RunContext } from "./context";
 export { RunResult } from "./result";
 export type { RunResultOptions } from "./result";
 export { run, stream } from "./run";
-export type { RunOptions, StreamOptions, StreamedRunResult } from "./run";
+export type {
+	RunOptions,
+	StreamOptions,
+	StreamedRunResult,
+	ToolErrorFormatter,
+	CallModelInputFilter,
+	MaxTurnsErrorHandler,
+} from "./run";
 
 export { createSession, forkSession, prompt, resumeSession, Session } from "./session";
 export type { SessionConfig, SessionSnapshot } from "./session";
@@ -16,8 +23,21 @@ export type { FunctionTool, ToolExecuteOptions } from "./tool";
 export { isHostedTool, isFunctionTool } from "./hosted-tool";
 export type { HostedTool, AgentTool } from "./hosted-tool";
 
-export { webSearchTool, codeInterpreterTool, mcpTool, imageGenerationTool } from "./builtin-tools";
-export type { WebSearchToolConfig, CodeInterpreterToolConfig, McpToolConfig } from "./builtin-tools";
+export {
+	webSearchTool,
+	codeInterpreterTool,
+	mcpTool,
+	imageGenerationTool,
+	fileSearchTool,
+	computerUseTool,
+} from "./builtin-tools";
+export type {
+	WebSearchToolConfig,
+	CodeInterpreterToolConfig,
+	McpToolConfig,
+	FileSearchToolConfig,
+	ComputerUseToolConfig,
+} from "./builtin-tools";
 
 export { TodoList, todoTool } from "./todo";
 export type { Todo, TodoStatus, TodoUpdateListener } from "./todo";
@@ -26,13 +46,26 @@ export { subagent, subagentToDefinition, subagentToTool } from "./subagent";
 export type { SubAgent, SubAgentConfig } from "./subagent";
 
 export { handoff, handoffToDefinition } from "./handoff";
-export type { Handoff, HandoffConfig } from "./handoff";
+export type { Handoff, HandoffConfig, HandoffInputData, HandoffInputFilter } from "./handoff";
 
-export { runInputGuardrails, runOutputGuardrails } from "./guardrails";
-export type { GuardrailResult, InputGuardrail, OutputGuardrail } from "./guardrails";
+export {
+	runInputGuardrails,
+	runOutputGuardrails,
+	runToolInputGuardrails,
+	runToolOutputGuardrails,
+} from "./guardrails";
+export type {
+	GuardrailResult,
+	GuardrailRunResult,
+	InputGuardrail,
+	OutputGuardrail,
+	ToolInputGuardrail,
+	ToolOutputGuardrail,
+} from "./guardrails";
 
 export type {
 	AgentHooks,
+	RunHooks,
 	ToolCallDecision,
 	HandoffDecision,
 	ToolMatcher,
@@ -70,6 +103,8 @@ export type {
 	HostedToolDefinition,
 	ModelSettings,
 	ReasoningEffort,
+	ReasoningSummary,
+	Truncation,
 	ResponseFormat,
 	ToolChoice,
 	ToolUseBehavior,
@@ -88,6 +123,7 @@ export {
 	RunAbortedError,
 	InputGuardrailTripwireTriggered,
 	OutputGuardrailTripwireTriggered,
+	ToolTimeoutError,
 } from "./errors";
 
 export { zodToJsonSchema } from "./utils/zod";

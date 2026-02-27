@@ -17,6 +17,10 @@ export interface FunctionTool<TParams = any, TContext = any> {
 		params: TParams,
 		options?: ToolExecuteOptions,
 	) => Promise<string> | string;
+	/** Timeout in milliseconds. If the tool doesn't complete in time, a ToolTimeoutError is thrown. */
+	timeout?: number;
+	/** If false or returns false, the tool is excluded from the tools list sent to the LLM. */
+	isEnabled?: boolean | ((context: TContext) => boolean | Promise<boolean>);
 }
 
 export function tool<TParams, TContext = unknown>(config: {
@@ -28,6 +32,8 @@ export function tool<TParams, TContext = unknown>(config: {
 		params: TParams,
 		options?: ToolExecuteOptions,
 	) => Promise<string> | string;
+	timeout?: number;
+	isEnabled?: boolean | ((context: TContext) => boolean | Promise<boolean>);
 }): FunctionTool<TParams, TContext> {
 	return {
 		type: "function",
@@ -35,6 +41,8 @@ export function tool<TParams, TContext = unknown>(config: {
 		description: config.description,
 		parameters: config.parameters,
 		execute: config.execute,
+		timeout: config.timeout,
+		isEnabled: config.isEnabled,
 	};
 }
 

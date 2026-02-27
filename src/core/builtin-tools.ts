@@ -81,3 +81,42 @@ export function imageGenerationTool(): HostedTool {
 		},
 	};
 }
+
+export interface FileSearchToolConfig {
+	vectorStoreIds: string[];
+	maxNumResults?: number;
+}
+
+export function fileSearchTool(config: FileSearchToolConfig): HostedTool {
+	const definition: HostedToolDefinition = {
+		type: "file_search",
+		vector_store_ids: config.vectorStoreIds,
+	};
+	if (config.maxNumResults !== undefined) {
+		definition.max_num_results = config.maxNumResults;
+	}
+	return {
+		type: "hosted",
+		name: "file_search",
+		definition,
+	};
+}
+
+export interface ComputerUseToolConfig {
+	displayWidth: number;
+	displayHeight: number;
+	environment?: "windows" | "mac" | "linux";
+}
+
+export function computerUseTool(config: ComputerUseToolConfig): HostedTool {
+	return {
+		type: "hosted",
+		name: "computer_use_preview",
+		definition: {
+			type: "computer_use_preview",
+			display_width: config.displayWidth,
+			display_height: config.displayHeight,
+			environment: config.environment ?? "linux",
+		},
+	};
+}

@@ -73,6 +73,18 @@ export class MaxBudgetExceededError extends StratusError {
 	}
 }
 
+export class ToolTimeoutError extends StratusError {
+	readonly toolName: string;
+	readonly timeoutMs: number;
+
+	constructor(toolName: string, timeoutMs: number) {
+		super(`Tool "${toolName}" timed out after ${timeoutMs}ms`);
+		this.name = "ToolTimeoutError";
+		this.toolName = toolName;
+		this.timeoutMs = timeoutMs;
+	}
+}
+
 export class OutputGuardrailTripwireTriggered extends StratusError {
 	readonly guardrailName: string;
 	readonly outputInfo?: unknown;
