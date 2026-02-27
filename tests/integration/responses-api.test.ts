@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { createSession, forkSession, resumeSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
@@ -170,8 +170,7 @@ describe("responses api: structured output", () => {
 
 		const agent = new Agent({
 			name: "weather-reporter",
-			instructions:
-				"Use get_weather to look up the weather, then return a structured report.",
+			instructions: "Use get_weather to look up the weather, then return a structured report.",
 			model,
 			tools: [getWeather],
 			outputType: WeatherReport,
@@ -217,10 +216,7 @@ describe("responses api: streaming", () => {
 			tools: [calculate],
 		});
 
-		const { stream: eventStream, result: resultPromise } = stream(
-			agent,
-			"What is 144 / 12?",
-		);
+		const { stream: eventStream, result: resultPromise } = stream(agent, "What is 144 / 12?");
 
 		let hasToolCallStart = false;
 		let hasToolCallDelta = false;
@@ -498,9 +494,7 @@ describe("responses api: abort signal", () => {
 		const ac = new AbortController();
 		ac.abort();
 
-		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(
-			RunAbortedError,
-		);
+		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(RunAbortedError);
 	}, 60_000);
 
 	test("abort during tool execution cancels run", async () => {
@@ -540,12 +534,14 @@ describe("responses api: sessions", () => {
 		});
 
 		session.send("My favorite color is blue. Just acknowledge.");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r1 = await session.result;
 		expect(r1.output.length).toBeGreaterThan(0);
 
 		session.send("What is my favorite color? One word.");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r2 = await session.result;
 		expect(r2.output.toLowerCase()).toContain("blue");
 	}, 120_000);
@@ -558,12 +554,14 @@ describe("responses api: sessions", () => {
 		});
 
 		session.send("Weather in Tokyo?");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r1 = await session.result;
 		expect(r1.output).toContain("85");
 
 		session.send("And New York?");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r2 = await session.result;
 		expect(r2.output).toContain("72");
 	}, 120_000);
@@ -574,7 +572,8 @@ describe("responses api: sessions", () => {
 			instructions: "You are a helpful assistant. Be very concise.",
 		});
 		session1.send("My name is Tyler. Remember it.");
-		for await (const _event of session1.stream()) {}
+		for await (const _event of session1.stream()) {
+		}
 
 		const snapshot = session1.save();
 
@@ -585,7 +584,8 @@ describe("responses api: sessions", () => {
 		expect(session2.id).toBe(session1.id);
 
 		session2.send("What is my name?");
-		for await (const _event of session2.stream()) {}
+		for await (const _event of session2.stream()) {
+		}
 		const result = await session2.result;
 		expect(result.output.toLowerCase()).toContain("tyler");
 	}, 120_000);
@@ -596,7 +596,8 @@ describe("responses api: sessions", () => {
 			instructions: "You are a helpful assistant. Be very concise.",
 		});
 		session1.send("The secret number is 42.");
-		for await (const _event of session1.stream()) {}
+		for await (const _event of session1.stream()) {
+		}
 
 		const snapshot = session1.save();
 
@@ -607,7 +608,8 @@ describe("responses api: sessions", () => {
 		expect(forked.id).not.toBe(session1.id);
 
 		forked.send("What is the secret number?");
-		for await (const _event of forked.stream()) {}
+		for await (const _event of forked.stream()) {
+		}
 		const result = await forked.result;
 		expect(result.output).toContain("42");
 	}, 120_000);
@@ -624,7 +626,8 @@ describe("responses api: sessions", () => {
 
 		let threw = false;
 		try {
-			for await (const _event of session.stream({ signal: ac.signal })) {}
+			for await (const _event of session.stream({ signal: ac.signal })) {
+			}
 		} catch (e) {
 			if (e instanceof RunAbortedError) threw = true;
 		}
@@ -662,7 +665,8 @@ describe("responses api: multimodal", () => {
 			{ type: "text", text: "What is the capital of Japan? One word." },
 		];
 		session.send(parts);
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const result = await session.result;
 		expect(result.output.toLowerCase()).toContain("tokyo");
 	}, 60_000);
@@ -692,8 +696,7 @@ describe("responses api: subagents", () => {
 
 		const parentAgent = new Agent({
 			name: "parent",
-			instructions:
-				"You are a helpful assistant. Use ask_math for any math questions. Be concise.",
+			instructions: "You are a helpful assistant. Use ask_math for any math questions. Be concise.",
 			model,
 			subagents: [sa],
 		});
@@ -721,8 +724,7 @@ describe("responses api: subagents", () => {
 
 		const parentAgent = new Agent({
 			name: "parent",
-			instructions:
-				"Use run_weather_child for weather questions. Be concise.",
+			instructions: "Use run_weather_child for weather questions. Be concise.",
 			model,
 			subagents: [sa],
 		});

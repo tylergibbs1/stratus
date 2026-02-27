@@ -59,18 +59,13 @@ describe("tool parameter validation", () => {
 		const agent = new Agent({ name: "test", model, tools: [myTool] });
 		const result = await run(agent, "Search");
 
-		const toolMsg = result.messages.find(
-			(m) => m.role === "tool" && m.content.includes("Error"),
-		);
+		const toolMsg = result.messages.find((m) => m.role === "tool" && m.content.includes("Error"));
 		expect(toolMsg).toBeDefined();
 		expect(result.output).toBe("Recovered");
 	});
 
 	test("missing required field in arguments sends error", async () => {
-		const model = mockModel([
-			tcResponse("my_tool", '{}'),
-			{ content: "Recovered", toolCalls: [] },
-		]);
+		const model = mockModel([tcResponse("my_tool", "{}"), { content: "Recovered", toolCalls: [] }]);
 
 		const myTool = tool({
 			name: "my_tool",
@@ -145,10 +140,7 @@ describe("tool parameter validation", () => {
 	test("empty object arguments for tool with no params works", async () => {
 		let executed = false;
 
-		const model = mockModel([
-			tcResponse("my_tool", "{}"),
-			{ content: "Done", toolCalls: [] },
-		]);
+		const model = mockModel([tcResponse("my_tool", "{}"), { content: "Done", toolCalls: [] }]);
 
 		const myTool = tool({
 			name: "my_tool",
@@ -168,10 +160,7 @@ describe("tool parameter validation", () => {
 	});
 
 	test("tool that returns non-string is handled gracefully", async () => {
-		const model = mockModel([
-			tcResponse("my_tool", "{}"),
-			{ content: "Handled", toolCalls: [] },
-		]);
+		const model = mockModel([tcResponse("my_tool", "{}"), { content: "Handled", toolCalls: [] }]);
 
 		const myTool = tool({
 			name: "my_tool",

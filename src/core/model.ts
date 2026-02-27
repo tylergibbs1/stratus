@@ -1,4 +1,11 @@
-import type { ChatMessage, HostedToolDefinition, ModelSettings, ResponseFormat, ToolCall, ToolDefinition } from "./types";
+import type {
+	ChatMessage,
+	HostedToolDefinition,
+	ModelSettings,
+	ResponseFormat,
+	ToolCall,
+	ToolDefinition,
+} from "./types";
 
 export interface ModelRequest {
 	messages: ChatMessage[];
@@ -32,7 +39,11 @@ export type StreamEvent =
 	| { type: "tool_call_start"; toolCall: { id: string; name: string } }
 	| { type: "tool_call_delta"; toolCallId: string; arguments: string }
 	| { type: "tool_call_done"; toolCallId: string }
-	| { type: "hosted_tool_call"; toolType: string; status: "in_progress" | "completed" | "searching" | "generating" | "interpreting" }
+	| {
+			type: "hosted_tool_call";
+			toolType: string;
+			status: "in_progress" | "completed" | "searching" | "generating" | "interpreting";
+	  }
 	| { type: "done"; response: ModelResponse };
 
 export interface ModelRequestOptions {

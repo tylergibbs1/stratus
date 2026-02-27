@@ -27,14 +27,16 @@ function mockFetch(response: {
 	);
 }
 
-function mockFetchSequence(responses: Array<{
-	ok?: boolean;
-	status?: number;
-	statusText?: string;
-	json?: unknown;
-	text?: string;
-	headers?: Headers;
-}>) {
+function mockFetchSequence(
+	responses: Array<{
+		ok?: boolean;
+		status?: number;
+		statusText?: string;
+		json?: unknown;
+		text?: string;
+		headers?: Headers;
+	}>,
+) {
 	let callIndex = 0;
 	// @ts-expect-error -- mock subset of fetch
 	globalThis.fetch = mock(() => {
@@ -199,10 +201,30 @@ describe("AzureChatCompletionsModel error handling", () => {
 
 	test("429 exhausts all retries and throws", async () => {
 		mockFetchSequence([
-			{ ok: false, status: 429, text: "Rate limited", headers: new Headers({ "retry-after": "0" }) },
-			{ ok: false, status: 429, text: "Rate limited", headers: new Headers({ "retry-after": "0" }) },
-			{ ok: false, status: 429, text: "Rate limited", headers: new Headers({ "retry-after": "0" }) },
-			{ ok: false, status: 429, text: "Rate limited", headers: new Headers({ "retry-after": "0" }) },
+			{
+				ok: false,
+				status: 429,
+				text: "Rate limited",
+				headers: new Headers({ "retry-after": "0" }),
+			},
+			{
+				ok: false,
+				status: 429,
+				text: "Rate limited",
+				headers: new Headers({ "retry-after": "0" }),
+			},
+			{
+				ok: false,
+				status: 429,
+				text: "Rate limited",
+				headers: new Headers({ "retry-after": "0" }),
+			},
+			{
+				ok: false,
+				status: 429,
+				text: "Rate limited",
+				headers: new Headers({ "retry-after": "0" }),
+			},
 		]);
 
 		const model = new AzureChatCompletionsModel(chatConfig);

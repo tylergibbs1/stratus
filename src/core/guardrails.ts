@@ -1,7 +1,4 @@
-import {
-	InputGuardrailTripwireTriggered,
-	OutputGuardrailTripwireTriggered,
-} from "./errors";
+import { InputGuardrailTripwireTriggered, OutputGuardrailTripwireTriggered } from "./errors";
 
 export interface GuardrailResult {
 	tripwireTriggered: boolean;

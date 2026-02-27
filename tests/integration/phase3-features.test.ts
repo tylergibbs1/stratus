@@ -1,16 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
+import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
-import type { ToolCallDecision, HandoffDecision } from "../../src/core/hooks";
-import { run, stream } from "../../src/core/run";
-import {
-	createSession,
-	forkSession,
-	prompt,
-	resumeSession,
-} from "../../src/core/session";
+import type { HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
+import { stream, run } from "../../src/core/run";
+import { createSession, forkSession, prompt, resumeSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
@@ -67,14 +62,16 @@ describe("integration: sessions multi-turn", () => {
 
 		// Turn 1
 		session.send("My favorite color is blue. Just acknowledge.");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 
 		const r1 = await session.result;
 		expect(r1.output.length).toBeGreaterThan(0);
 
 		// Turn 2 — model should remember from turn 1
 		session.send("What is my favorite color? One word.");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 
 		const r2 = await session.result;
 		expect(r2.output.toLowerCase()).toContain("blue");
@@ -88,12 +85,14 @@ describe("integration: sessions multi-turn", () => {
 		});
 
 		session.send("Weather in Tokyo?");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r1 = await session.result;
 		expect(r1.output).toContain("85");
 
 		session.send("And New York?");
-		for await (const _event of session.stream()) {}
+		for await (const _event of session.stream()) {
+		}
 		const r2 = await session.result;
 		expect(r2.output).toContain("72");
 	}, 120_000);
@@ -241,9 +240,7 @@ describe("integration: multimodal", () => {
 			instructions: "Be very concise. One word answers.",
 		});
 
-		const parts: ContentPart[] = [
-			{ type: "text", text: "What is 2+2?" },
-		];
+		const parts: ContentPart[] = [{ type: "text", text: "What is 2+2?" }];
 		session.send(parts);
 
 		for await (const _event of session.stream()) {
@@ -373,9 +370,7 @@ describe("integration: abort signal", () => {
 		const ac = new AbortController();
 		ac.abort();
 
-		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(
-			RunAbortedError,
-		);
+		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(RunAbortedError);
 	}, 60_000);
 
 	test("abort during tool execution cancels run", async () => {
@@ -514,8 +509,7 @@ describe("integration: subagents", () => {
 
 		const parentAgent = new Agent({
 			name: "parent",
-			instructions:
-				"You are a helpful assistant. Use ask_math for any math questions. Be concise.",
+			instructions: "You are a helpful assistant. Use ask_math for any math questions. Be concise.",
 			model,
 			subagents: [sa],
 		});
@@ -543,8 +537,7 @@ describe("integration: subagents", () => {
 
 		const parentAgent = new Agent({
 			name: "parent",
-			instructions:
-				"Use run_weather_child for weather questions. Be concise.",
+			instructions: "Use run_weather_child for weather questions. Be concise.",
 			model,
 			subagents: [sa],
 		});
@@ -580,8 +573,7 @@ describe("integration: subagents", () => {
 
 		const session = createSession({
 			model,
-			instructions:
-				"Use run_math_child for math. Be concise.",
+			instructions: "Use run_math_child for math. Be concise.",
 			subagents: [sa],
 		});
 

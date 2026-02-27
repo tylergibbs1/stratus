@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { webSearchTool } from "../../src/core/builtin-tools";
-import type { HostedTool } from "../../src/core/hosted-tool";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 describe("hosted tools in run loop", () => {
@@ -66,7 +65,7 @@ describe("hosted tools in run loop", () => {
 	test("hosted tool calls are reported as unknown (server-side execution)", async () => {
 		let callCount = 0;
 		const model: Model = {
-			async getResponse(request: ModelRequest): Promise<ModelResponse> {
+			async getResponse(_request: ModelRequest): Promise<ModelResponse> {
 				callCount++;
 				if (callCount === 1) {
 					// Model tries to call a hosted tool — but we won't find it locally

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { type AgentTool, type HostedTool, isFunctionTool, isHostedTool } from "../../src/core/hosted-tool";
+import {
+	type AgentTool,
+	type HostedTool,
+	isFunctionTool,
+	isHostedTool,
+} from "../../src/core/hosted-tool";
 import { tool } from "../../src/core/tool";
 
 describe("HostedTool", () => {

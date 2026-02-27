@@ -37,7 +37,9 @@ describe("hook matchers: beforeToolCall", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "get_weather", arguments: '{}' } }],
+				toolCalls: [
+					{ id: "tc1", type: "function", function: { name: "get_weather", arguments: "{}" } },
+				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
 			{
@@ -50,12 +52,14 @@ describe("hook matchers: beforeToolCall", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "get_weather",
-				description: "Get weather",
-				parameters: z.object({}),
-				execute: async () => "sunny",
-			})],
+			tools: [
+				tool({
+					name: "get_weather",
+					description: "Get weather",
+					parameters: z.object({}),
+					execute: async () => "sunny",
+				}),
+			],
 			hooks: {
 				beforeToolCall: async ({ toolCall }) => {
 					called.push(toolCall.function.name);
@@ -73,8 +77,8 @@ describe("hook matchers: beforeToolCall", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "safe_tool", arguments: '{}' } },
-					{ id: "tc2", type: "function", function: { name: "dangerous_tool", arguments: '{}' } },
+					{ id: "tc1", type: "function", function: { name: "safe_tool", arguments: "{}" } },
+					{ id: "tc2", type: "function", function: { name: "dangerous_tool", arguments: "{}" } },
 				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
@@ -120,12 +124,12 @@ describe("hook matchers: beforeToolCall", () => {
 		const result = await run(agent, "Use both");
 		expect(denied).toEqual(["dangerous_tool"]);
 		// The safe tool should have executed, dangerous should have been denied
-		expect(result.messages.some(
-			(m) => m.role === "tool" && m.content === "safe_result",
-		)).toBe(true);
-		expect(result.messages.some(
-			(m) => m.role === "tool" && m.content === "Not allowed",
-		)).toBe(true);
+		expect(result.messages.some((m) => m.role === "tool" && m.content === "safe_result")).toBe(
+			true,
+		);
+		expect(result.messages.some((m) => m.role === "tool" && m.content === "Not allowed")).toBe(
+			true,
+		);
 	});
 
 	test("regex matcher filters by pattern", async () => {
@@ -134,9 +138,9 @@ describe("hook matchers: beforeToolCall", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "read_file", arguments: '{}' } },
-					{ id: "tc2", type: "function", function: { name: "write_file", arguments: '{}' } },
-					{ id: "tc3", type: "function", function: { name: "get_weather", arguments: '{}' } },
+					{ id: "tc1", type: "function", function: { name: "read_file", arguments: "{}" } },
+					{ id: "tc2", type: "function", function: { name: "write_file", arguments: "{}" } },
+					{ id: "tc3", type: "function", function: { name: "get_weather", arguments: "{}" } },
 				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
@@ -160,9 +164,24 @@ describe("hook matchers: beforeToolCall", () => {
 			name: "test",
 			model,
 			tools: [
-				tool({ name: "read_file", description: "R", parameters: z.object({}), execute: async () => "r" }),
-				tool({ name: "write_file", description: "W", parameters: z.object({}), execute: async () => "w" }),
-				tool({ name: "get_weather", description: "G", parameters: z.object({}), execute: async () => "g" }),
+				tool({
+					name: "read_file",
+					description: "R",
+					parameters: z.object({}),
+					execute: async () => "r",
+				}),
+				tool({
+					name: "write_file",
+					description: "W",
+					parameters: z.object({}),
+					execute: async () => "w",
+				}),
+				tool({
+					name: "get_weather",
+					description: "G",
+					parameters: z.object({}),
+					execute: async () => "g",
+				}),
 			],
 			hooks: {
 				beforeToolCall: matchers,
@@ -179,9 +198,9 @@ describe("hook matchers: beforeToolCall", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "tool_a", arguments: '{}' } },
-					{ id: "tc2", type: "function", function: { name: "tool_b", arguments: '{}' } },
-					{ id: "tc3", type: "function", function: { name: "tool_c", arguments: '{}' } },
+					{ id: "tc1", type: "function", function: { name: "tool_a", arguments: "{}" } },
+					{ id: "tc2", type: "function", function: { name: "tool_b", arguments: "{}" } },
+					{ id: "tc3", type: "function", function: { name: "tool_c", arguments: "{}" } },
 				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
@@ -205,9 +224,24 @@ describe("hook matchers: beforeToolCall", () => {
 			name: "test",
 			model,
 			tools: [
-				tool({ name: "tool_a", description: "A", parameters: z.object({}), execute: async () => "a" }),
-				tool({ name: "tool_b", description: "B", parameters: z.object({}), execute: async () => "b" }),
-				tool({ name: "tool_c", description: "C", parameters: z.object({}), execute: async () => "c" }),
+				tool({
+					name: "tool_a",
+					description: "A",
+					parameters: z.object({}),
+					execute: async () => "a",
+				}),
+				tool({
+					name: "tool_b",
+					description: "B",
+					parameters: z.object({}),
+					execute: async () => "b",
+				}),
+				tool({
+					name: "tool_c",
+					description: "C",
+					parameters: z.object({}),
+					execute: async () => "c",
+				}),
 			],
 			hooks: {
 				beforeToolCall: matchers,
@@ -223,7 +257,9 @@ describe("hook matchers: beforeToolCall", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "my_tool", arguments: '{}' } }],
+				toolCalls: [
+					{ id: "tc1", type: "function", function: { name: "my_tool", arguments: "{}" } },
+				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
 			{
@@ -252,12 +288,14 @@ describe("hook matchers: beforeToolCall", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "my_tool",
-				description: "My tool",
-				parameters: z.object({}),
-				execute: async () => "result",
-			})],
+			tools: [
+				tool({
+					name: "my_tool",
+					description: "My tool",
+					parameters: z.object({}),
+					execute: async () => "result",
+				}),
+			],
 			hooks: {
 				beforeToolCall: matchers,
 			},
@@ -274,7 +312,9 @@ describe("hook matchers: afterToolCall", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "my_tool", arguments: '{}' } }],
+				toolCalls: [
+					{ id: "tc1", type: "function", function: { name: "my_tool", arguments: "{}" } },
+				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
 			{
@@ -287,12 +327,14 @@ describe("hook matchers: afterToolCall", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "my_tool",
-				description: "My tool",
-				parameters: z.object({}),
-				execute: async () => "tool_output",
-			})],
+			tools: [
+				tool({
+					name: "my_tool",
+					description: "My tool",
+					parameters: z.object({}),
+					execute: async () => "tool_output",
+				}),
+			],
 			hooks: {
 				afterToolCall: async ({ result }) => {
 					results.push(result);
@@ -310,8 +352,8 @@ describe("hook matchers: afterToolCall", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "tool_a", arguments: '{}' } },
-					{ id: "tc2", type: "function", function: { name: "tool_b", arguments: '{}' } },
+					{ id: "tc1", type: "function", function: { name: "tool_a", arguments: "{}" } },
+					{ id: "tc2", type: "function", function: { name: "tool_b", arguments: "{}" } },
 				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
@@ -335,8 +377,18 @@ describe("hook matchers: afterToolCall", () => {
 			name: "test",
 			model,
 			tools: [
-				tool({ name: "tool_a", description: "A", parameters: z.object({}), execute: async () => "result_a" }),
-				tool({ name: "tool_b", description: "B", parameters: z.object({}), execute: async () => "result_b" }),
+				tool({
+					name: "tool_a",
+					description: "A",
+					parameters: z.object({}),
+					execute: async () => "result_a",
+				}),
+				tool({
+					name: "tool_b",
+					description: "B",
+					parameters: z.object({}),
+					execute: async () => "result_b",
+				}),
 			],
 			hooks: {
 				afterToolCall: matchers,

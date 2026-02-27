@@ -48,9 +48,7 @@ describe("parseSSE", () => {
 	});
 
 	test("handles multiple events in one chunk", async () => {
-		const stream = makeStream([
-			'data: {"a":1}\n\ndata: {"b":2}\n\ndata: [DONE]\n\n',
-		]);
+		const stream = makeStream(['data: {"a":1}\n\ndata: {"b":2}\n\ndata: [DONE]\n\n']);
 
 		const results: string[] = [];
 		for await (const data of parseSSE(stream)) {

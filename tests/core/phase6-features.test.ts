@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
-import { fileSearchTool, computerUseTool } from "../../src/core/builtin-tools";
+import { computerUseTool, fileSearchTool } from "../../src/core/builtin-tools";
 import { ToolTimeoutError } from "../../src/core/errors";
 import type { ToolInputGuardrail, ToolOutputGuardrail } from "../../src/core/guardrails";
 import { handoff, handoffToDefinition } from "../../src/core/handoff";
 import type { RunHooks } from "../../src/core/hooks";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
 import { RunResult } from "../../src/core/result";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import type { ModelSettings } from "../../src/core/types";
 
@@ -68,7 +68,11 @@ function textResponse(content: string): ModelResponse {
 }
 
 // Helper for tool call response
-function toolCallResponse(toolName: string, args: Record<string, unknown>, id = "tc_1"): ModelResponse {
+function toolCallResponse(
+	toolName: string,
+	args: Record<string, unknown>,
+	id = "tc_1",
+): ModelResponse {
 	return {
 		content: null,
 		toolCalls: [
@@ -98,10 +102,7 @@ describe("Tool timeout", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("slow_tool", {}),
-			textResponse("ok"),
-		]);
+		const model = mockModel([toolCallResponse("slow_tool", {}), textResponse("ok")]);
 
 		const agent = new Agent({ name: "test", model, tools: [slowTool] });
 		const result = await run(agent, "go");
@@ -128,10 +129,7 @@ describe("Tool timeout", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("fast_tool", {}),
-			textResponse("done"),
-		]);
+		const model = mockModel([toolCallResponse("fast_tool", {}), textResponse("done")]);
 
 		const agent = new Agent({ name: "test", model, tools: [fastTool] });
 		const result = await run(agent, "go");
@@ -357,10 +355,7 @@ describe("RunHooks", () => {
 		};
 
 		const targetAgent = new Agent({ name: "beta" });
-		const model = mockModel([
-			toolCallResponse("transfer_to_beta", {}),
-			textResponse("from beta"),
-		]);
+		const model = mockModel([toolCallResponse("transfer_to_beta", {}), textResponse("from beta")]);
 
 		const agent = new Agent({
 			name: "alpha",
@@ -391,10 +386,7 @@ describe("RunHooks", () => {
 			execute: async (_ctx, params) => `Hello, ${params.name}!`,
 		});
 
-		const model = mockModel([
-			toolCallResponse("greet", { name: "World" }),
-			textResponse("done"),
-		]);
+		const model = mockModel([toolCallResponse("greet", { name: "World" }), textResponse("done")]);
 
 		const agent = new Agent({ name: "test", model, tools: [myTool] });
 		await run(agent, "go", { runHooks });
@@ -431,10 +423,7 @@ describe("AgentHooks onLlmStart/onLlmEnd", () => {
 			execute: async () => "42",
 		});
 
-		const model = mockModel([
-			toolCallResponse("calc", {}),
-			textResponse("answer is 42"),
-		]);
+		const model = mockModel([toolCallResponse("calc", {}), textResponse("answer is 42")]);
 
 		const agent = new Agent({
 			name: "test",
@@ -454,12 +443,7 @@ describe("AgentHooks onLlmStart/onLlmEnd", () => {
 
 		// Two LLM calls: first has 1 message (user only, no instructions),
 		// second has 3 messages (user + assistant w/ tool_call + tool result)
-		expect(events).toEqual([
-			"llm_start:1",
-			"llm_end:tc=1",
-			"llm_start:3",
-			"llm_end:tc=0",
-		]);
+		expect(events).toEqual(["llm_start:1", "llm_end:tc=1", "llm_start:3", "llm_end:tc=0"]);
 	});
 });
 
@@ -482,10 +466,7 @@ describe("Tool guardrails", () => {
 			execute: async () => "should not run",
 		});
 
-		const model = mockModel([
-			toolCallResponse("dangerous_tool", {}),
-			textResponse("blocked"),
-		]);
+		const model = mockModel([toolCallResponse("dangerous_tool", {}), textResponse("blocked")]);
 
 		const agent = new Agent({ name: "test", model, tools: [dangerousTool] });
 		const result = await run(agent, "go", {
@@ -515,10 +496,7 @@ describe("Tool guardrails", () => {
 			execute: async () => "secret data here",
 		});
 
-		const model = mockModel([
-			toolCallResponse("leaky_tool", {}),
-			textResponse("done"),
-		]);
+		const model = mockModel([toolCallResponse("leaky_tool", {}), textResponse("done")]);
 
 		const agent = new Agent({ name: "test", model, tools: [leakyTool] });
 		const result = await run(agent, "go", {
@@ -547,10 +525,7 @@ describe("Tool guardrails", () => {
 			execute: async () => "safe result",
 		});
 
-		const model = mockModel([
-			toolCallResponse("safe_tool", {}),
-			textResponse("done"),
-		]);
+		const model = mockModel([toolCallResponse("safe_tool", {}), textResponse("done")]);
 
 		const agent = new Agent({ name: "test", model, tools: [safeTool] });
 		const result = await run(agent, "go", {
@@ -658,9 +633,7 @@ describe("Custom toolUseBehavior function", () => {
 			execute: async (_ctx, params) => params.answer,
 		});
 
-		const model = mockModel([
-			toolCallResponse("final_answer", { answer: "42" }),
-		]);
+		const model = mockModel([toolCallResponse("final_answer", { answer: "42" })]);
 
 		const agent = new Agent({
 			name: "test",
@@ -684,10 +657,7 @@ describe("Custom toolUseBehavior function", () => {
 			execute: async () => "step done",
 		});
 
-		const model = mockModel([
-			toolCallResponse("intermediate", {}),
-			textResponse("final answer"),
-		]);
+		const model = mockModel([toolCallResponse("intermediate", {}), textResponse("final answer")]);
 
 		const agent = new Agent({
 			name: "test",
@@ -774,10 +744,7 @@ describe("toolErrorFormatter", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("fail_tool", {}),
-			textResponse("handled"),
-		]);
+		const model = mockModel([toolCallResponse("fail_tool", {}), textResponse("handled")]);
 
 		const agent = new Agent({ name: "test", model, tools: [failTool] });
 		const result = await run(agent, "go", {
@@ -802,10 +769,7 @@ describe("toolErrorFormatter", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("fail_tool", {}),
-			textResponse("handled"),
-		]);
+		const model = mockModel([toolCallResponse("fail_tool", {}), textResponse("handled")]);
 
 		const agent = new Agent({ name: "test", model, tools: [failTool] });
 		const result = await run(agent, "go");
@@ -901,10 +865,7 @@ describe("toInputList() on RunResult", () => {
 			execute: async () => "42",
 		});
 
-		const model = mockModel([
-			toolCallResponse("calc", {}),
-			textResponse("done"),
-		]);
+		const model = mockModel([toolCallResponse("calc", {}), textResponse("done")]);
 
 		const agent = new Agent({ name: "test", model, tools: [myTool] });
 		const result = await run(agent, "go");
@@ -1131,10 +1092,7 @@ describe("Streaming with new features", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("slow_stream_tool", {}),
-			textResponse("recovered"),
-		]);
+		const model = mockModel([toolCallResponse("slow_stream_tool", {}), textResponse("recovered")]);
 
 		const agent = new Agent({ name: "test", model, tools: [slowTool] });
 		const { stream: s, result } = stream(agent, "go");
@@ -1173,7 +1131,8 @@ describe("Streaming with new features", () => {
 		});
 
 		const { stream: s, result } = stream(agent, "go", { resetToolChoice: true });
-		for await (const _event of s) {}
+		for await (const _event of s) {
+		}
 		await result;
 
 		expect(requests[0]!.modelSettings?.toolChoice).toBe("required");
@@ -1208,7 +1167,8 @@ describe("Streaming with new features", () => {
 			},
 		});
 
-		for await (const _event of s) {}
+		for await (const _event of s) {
+		}
 		const r = await result;
 		expect(r.output).toBe("Gracefully stopped at 2");
 	});
@@ -1229,7 +1189,8 @@ describe("Streaming with new features", () => {
 			}),
 		});
 
-		for await (const _event of s) {}
+		for await (const _event of s) {
+		}
 		await result;
 
 		expect(requests[0]!.modelSettings?.temperature).toBe(0.1);
@@ -1245,17 +1206,15 @@ describe("Streaming with new features", () => {
 			},
 		});
 
-		const model = mockModel([
-			toolCallResponse("fail", {}),
-			textResponse("ok"),
-		]);
+		const model = mockModel([toolCallResponse("fail", {}), textResponse("ok")]);
 
 		const agent = new Agent({ name: "test", model, tools: [failTool] });
 		const { stream: s, result } = stream(agent, "go", {
 			toolErrorFormatter: (name, err) => `STREAM_ERR:${name}:${(err as Error).message}`,
 		});
 
-		for await (const _event of s) {}
+		for await (const _event of s) {
+		}
 		const r = await result;
 		const toolMsg = r.messages.find((m) => m.role === "tool");
 		expect(toolMsg).toBeDefined();
@@ -1278,7 +1237,8 @@ describe("Streaming with new features", () => {
 		});
 
 		const { stream: s, result } = stream(agent, "go");
-		for await (const _event of s) {}
+		for await (const _event of s) {
+		}
 		await result;
 
 		expect(events).toEqual(["agent_llm_start", "agent_llm_end:done"]);

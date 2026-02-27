@@ -37,7 +37,12 @@ export interface DeveloperMessage {
 	content: string;
 }
 
-export type ChatMessage = SystemMessage | DeveloperMessage | UserMessage | AssistantMessage | ToolMessage;
+export type ChatMessage =
+	| SystemMessage
+	| DeveloperMessage
+	| UserMessage
+	| AssistantMessage
+	| ToolMessage;
 
 export interface ToolCall {
 	id: string;
@@ -99,7 +104,7 @@ export type ResponseFormat =
 				schema: Record<string, unknown>;
 				strict?: boolean;
 			};
-		};
+	  };
 
 export interface ToolDefinition {
 	type: "function";

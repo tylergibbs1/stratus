@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -29,9 +29,7 @@ function mockModel(responses: ModelResponse[]): Model {
 	};
 }
 
-function toolCallResponse(
-	calls: { id: string; name: string; args: string }[],
-): ModelResponse {
+function toolCallResponse(calls: { id: string; name: string; args: string }[]): ModelResponse {
 	return {
 		content: null,
 		toolCalls: calls.map((c) => ({
@@ -61,7 +59,7 @@ describe("concurrent tool calls", () => {
 			parameters: z.object({ value: z.string() }),
 			execute: async (_ctx, { value }) => {
 				executionLog.push(`a:${value}`);
-				return `result_a`;
+				return "result_a";
 			},
 		});
 		const toolB = tool({
@@ -70,7 +68,7 @@ describe("concurrent tool calls", () => {
 			parameters: z.object({ value: z.string() }),
 			execute: async (_ctx, { value }) => {
 				executionLog.push(`b:${value}`);
-				return `result_b`;
+				return "result_b";
 			},
 		});
 		const toolC = tool({
@@ -79,7 +77,7 @@ describe("concurrent tool calls", () => {
 			parameters: z.object({ value: z.string() }),
 			execute: async (_ctx, { value }) => {
 				executionLog.push(`c:${value}`);
-				return `result_c`;
+				return "result_c";
 			},
 		});
 

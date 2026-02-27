@@ -3,8 +3,8 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
 import { run } from "../../src/core/run";
-import { tool } from "../../src/core/tool";
 import { subagent } from "../../src/core/subagent";
+import { tool } from "../../src/core/tool";
 import { getCurrentTrace, withTrace } from "../../src/core/tracing";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -120,11 +120,15 @@ describe("tracing extended", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "transfer_to_b", arguments: "{}" } }],
+				toolCalls: [
+					{ id: "tc1", type: "function", function: { name: "transfer_to_b", arguments: "{}" } },
+				],
 			},
 			{
 				content: null,
-				toolCalls: [{ id: "tc2", type: "function", function: { name: "transfer_to_c", arguments: "{}" } }],
+				toolCalls: [
+					{ id: "tc2", type: "function", function: { name: "transfer_to_c", arguments: "{}" } },
+				],
 			},
 			{ content: "Done", toolCalls: [] },
 		]);
@@ -155,7 +159,9 @@ describe("tracing extended", () => {
 		const parentModel = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"q":"hi"}' } }],
+				toolCalls: [
+					{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"q":"hi"}' } },
+				],
 			},
 			{ content: "Done", toolCalls: [] },
 		]);

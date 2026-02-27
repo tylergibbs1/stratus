@@ -4,9 +4,9 @@ import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
 import { run } from "../../src/core/run";
-import { tool } from "../../src/core/tool";
 import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
+import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
 	let callIndex = 0;
@@ -52,12 +52,14 @@ describe("onStop hook", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 			hooks: {
 				onStop: async ({ reason }) => {
 					stopReason = reason;
@@ -114,7 +116,11 @@ describe("onSubagentStart/onSubagentStop hooks", () => {
 		const events: string[] = [];
 
 		const childModel = mockModel([
-			{ content: "Child result", toolCalls: [], usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } },
+			{
+				content: "Child result",
+				toolCalls: [],
+				usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+			},
 		]);
 
 		const childAgent = new Agent({ name: "child", model: childModel });
@@ -130,7 +136,13 @@ describe("onSubagentStart/onSubagentStop hooks", () => {
 		const parentModel = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function", function: { name: "ask_child", arguments: '{"query":"hello"}' } }],
+				toolCalls: [
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "ask_child", arguments: '{"query":"hello"}' },
+					},
+				],
 				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
 			},
 			{
@@ -156,10 +168,7 @@ describe("onSubagentStart/onSubagentStop hooks", () => {
 
 		await run(parentAgent, "Use child");
 
-		expect(events).toEqual([
-			"start:child",
-			"stop:child:Child result",
-		]);
+		expect(events).toEqual(["start:child", "stop:child:Child result"]);
 	});
 });
 
@@ -168,7 +177,11 @@ describe("onSessionStart/onSessionEnd hooks", () => {
 		const events: string[] = [];
 
 		const model = mockModel([
-			{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+			{
+				content: "Hello!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
 		]);
 
 		const session = createSession({
@@ -196,15 +209,27 @@ describe("onSessionStart/onSessionEnd hooks", () => {
 		let endCount = 0;
 
 		const model = mockModel([
-			{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
-			{ content: "World!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+			{
+				content: "Hello!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
+			{
+				content: "World!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
 		]);
 
 		const session = createSession({
 			model,
 			hooks: {
-				onSessionStart: async () => { startCount++; },
-				onSessionEnd: async () => { endCount++; },
+				onSessionStart: async () => {
+					startCount++;
+				},
+				onSessionEnd: async () => {
+					endCount++;
+				},
 			},
 		});
 

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import { MaxBudgetExceededError } from "../../src/core/errors";
-import { run, stream } from "../../src/core/run";
-import { subagent } from "../../src/core/subagent";
+import { stream, run } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
+import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import type { ChatMessage } from "../../src/core/types";
 
@@ -199,11 +199,9 @@ describe("Phase 4: Integration Tests", () => {
 			},
 		});
 
-		const result = await run(
-			agent,
-			"What's the weather in London? Also calculate 2+2.",
-			{ maxTurns: 5 },
-		);
+		const result = await run(agent, "What's the weather in London? Also calculate 2+2.", {
+			maxTurns: 5,
+		});
 
 		expect(result.output.length).toBeGreaterThan(0);
 		// The weather tool should have been allowed
@@ -270,7 +268,7 @@ describe("Phase 4: Integration Tests", () => {
 				onSubagentStart: async ({ subagent }) => {
 					events.push(`start:${subagent.agent.name}`);
 				},
-				onSubagentStop: async ({ subagent, result }) => {
+				onSubagentStop: async ({ subagent, result: _result }) => {
 					events.push(`stop:${subagent.agent.name}`);
 				},
 			},
@@ -304,7 +302,7 @@ describe("Phase 4: Integration Tests", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			instructions: longPrefix + "Reply with exactly one word: hello.",
+			instructions: `${longPrefix}Reply with exactly one word: hello.`,
 		});
 
 		// First call: seeds the cache

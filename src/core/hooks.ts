@@ -9,9 +9,7 @@ export type ToolCallDecision =
 	| { decision: "deny"; reason?: string }
 	| { decision: "modify"; modifiedParams: Record<string, unknown> };
 
-export type HandoffDecision =
-	| { decision: "allow" }
-	| { decision: "deny"; reason?: string };
+export type HandoffDecision = { decision: "allow" } | { decision: "deny"; reason?: string };
 
 export type ToolMatcher = string | RegExp;
 
@@ -21,7 +19,7 @@ export interface MatchedToolCallHook<TContext = unknown> {
 		agent: Agent<TContext, any>;
 		toolCall: ToolCall;
 		context: TContext;
-	}) => void | ToolCallDecision | Promise<void | ToolCallDecision>;
+	}) => undefined | ToolCallDecision | Promise<undefined | ToolCallDecision>;
 }
 
 export interface MatchedAfterToolCallHook<TContext = unknown> {
@@ -39,7 +37,7 @@ export type BeforeToolCallHook<TContext = unknown> =
 			agent: Agent<TContext, any>;
 			toolCall: ToolCall;
 			context: TContext;
-		}) => void | ToolCallDecision | Promise<void | ToolCallDecision>)
+	  }) => undefined | ToolCallDecision | Promise<undefined | ToolCallDecision>)
 	| MatchedToolCallHook<TContext>[];
 
 export type AfterToolCallHook<TContext = unknown> =
@@ -48,7 +46,7 @@ export type AfterToolCallHook<TContext = unknown> =
 			toolCall: ToolCall;
 			result: string;
 			context: TContext;
-		}) => void | Promise<void>)
+	  }) => void | Promise<void>)
 	| MatchedAfterToolCallHook<TContext>[];
 
 export interface AgentHooks<TContext = unknown> {
@@ -72,7 +70,7 @@ export interface AgentHooks<TContext = unknown> {
 		fromAgent: Agent<TContext, any>;
 		toAgent: Agent<TContext, any>;
 		context: TContext;
-	}) => void | HandoffDecision | Promise<void | HandoffDecision>;
+	}) => undefined | HandoffDecision | Promise<undefined | HandoffDecision>;
 
 	onStop?: (params: {
 		agent: Agent<TContext, any>;

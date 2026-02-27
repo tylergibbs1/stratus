@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { handoff } from "../../src/core/handoff";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -36,7 +36,11 @@ describe("handoffs", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "Hello from Agent B!", toolCalls: [] },
@@ -58,7 +62,11 @@ describe("handoffs", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -134,7 +142,11 @@ describe("handoffs", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "I am B", toolCalls: [] },
@@ -153,7 +165,12 @@ describe("handoffs", () => {
 		};
 
 		const agentB = new Agent({ name: "agent_b", model, instructions: "You are Agent B" });
-		const agentA = new Agent({ name: "agent_a", model, instructions: "You are Agent A", handoffs: [agentB] });
+		const agentA = new Agent({
+			name: "agent_a",
+			model,
+			instructions: "You are Agent A",
+			handoffs: [agentB],
+		});
 
 		await run(agentA, "Transfer");
 
@@ -171,7 +188,11 @@ describe("handoffs", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "Streamed from B", toolCalls: [] },

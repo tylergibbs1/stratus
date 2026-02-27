@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { AgentHooks, HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -75,7 +75,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "echo", arguments: '{"message":"hi"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "echo", arguments: '{"message":"hi"}' },
+					},
 				],
 			},
 			{ content: "Ok", toolCalls: [] },
@@ -108,7 +112,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "track", arguments: '{"value":"original"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "track", arguments: '{"value":"original"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -130,7 +138,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "echo", arguments: '{"message":"hi"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "echo", arguments: '{"message":"hi"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -152,7 +164,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "echo", arguments: '{"message":"hi"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "echo", arguments: '{"message":"hi"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -178,7 +194,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "echo", arguments: '{"message":"hi"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "echo", arguments: '{"message":"hi"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -202,7 +222,11 @@ describe("enhanced hooks - tool call decisions", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "echo", arguments: '{"message":"original"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "echo", arguments: '{"message":"original"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -236,7 +260,8 @@ describe("enhanced hooks - handoff decisions", () => {
 		]);
 
 		const hooks: AgentHooks = {
-			beforeHandoff: () => ({ decision: "deny", reason: "Not allowed to transfer" }) as HandoffDecision,
+			beforeHandoff: () =>
+				({ decision: "deny", reason: "Not allowed to transfer" }) as HandoffDecision,
 		};
 
 		const agent = new Agent({

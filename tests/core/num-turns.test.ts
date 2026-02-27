@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -33,7 +33,11 @@ function mockModel(responses: ModelResponse[]): Model {
 describe("numTurns", () => {
 	test("single turn returns numTurns = 1", async () => {
 		const model = mockModel([
-			{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+			{
+				content: "Hello!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
 		]);
 		const agent = new Agent({ name: "test", model });
 		const result = await run(agent, "Hi");
@@ -58,12 +62,14 @@ describe("numTurns", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 		});
 		const result = await run(agent, "Do something");
 
@@ -92,12 +98,14 @@ describe("numTurns", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 		});
 		const result = await run(agent, "Do things");
 
@@ -121,12 +129,14 @@ describe("numTurns", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 		});
 
 		const { stream: s, result } = stream(agent, "Do something");
@@ -151,12 +161,14 @@ describe("numTurns", () => {
 			name: "test",
 			model,
 			toolUseBehavior: "stop_on_first_tool",
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "tool_result",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "tool_result",
+				}),
+			],
 		});
 		const result = await run(agent, "Do it");
 

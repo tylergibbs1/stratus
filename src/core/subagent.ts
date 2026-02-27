@@ -36,8 +36,7 @@ export function subagent<TParent = any, TChild = any, TChildOutput = undefined>(
 		type: "subagent",
 		agent: config.agent,
 		toolName: config.toolName ?? `run_${config.agent.name}`,
-		toolDescription:
-			config.toolDescription ?? `Run the ${config.agent.name} sub-agent`,
+		toolDescription: config.toolDescription ?? `Run the ${config.agent.name} sub-agent`,
 		inputSchema: config.inputSchema,
 		mapInput: config.mapInput,
 		mapContext: config.mapContext,

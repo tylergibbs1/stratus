@@ -123,9 +123,9 @@ describe("AzureChatCompletionsModel", () => {
 		});
 
 		const model = new AzureChatCompletionsModel(config);
-		expect(
-			model.getResponse({ messages: [{ role: "user", content: "test" }] }),
-		).rejects.toThrow(ContentFilterError);
+		expect(model.getResponse({ messages: [{ role: "user", content: "test" }] })).rejects.toThrow(
+			ContentFilterError,
+		);
 	});
 
 	test("getResponse throws ModelError on HTTP error", async () => {
@@ -137,9 +137,9 @@ describe("AzureChatCompletionsModel", () => {
 		});
 
 		const model = new AzureChatCompletionsModel(config);
-		expect(
-			model.getResponse({ messages: [{ role: "user", content: "test" }] }),
-		).rejects.toThrow(ModelError);
+		expect(model.getResponse({ messages: [{ role: "user", content: "test" }] })).rejects.toThrow(
+			ModelError,
+		);
 	});
 
 	test("getStreamedResponse yields events", async () => {
@@ -204,9 +204,7 @@ describe("AzureChatCompletionsModel", () => {
 					choices: [
 						{
 							delta: {
-								tool_calls: [
-									{ index: 0, function: { arguments: '{"name":' } },
-								],
+								tool_calls: [{ index: 0, function: { arguments: '{"name":' } }],
 							},
 							index: 0,
 						},
@@ -216,9 +214,7 @@ describe("AzureChatCompletionsModel", () => {
 					choices: [
 						{
 							delta: {
-								tool_calls: [
-									{ index: 0, function: { arguments: '"World"}' } },
-								],
+								tool_calls: [{ index: 0, function: { arguments: '"World"}' } }],
 							},
 							index: 0,
 						},

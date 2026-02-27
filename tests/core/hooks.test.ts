@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { AgentHooks } from "../../src/core/hooks";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -84,7 +84,11 @@ describe("hooks", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "greet", arguments: '{"name":"World"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "greet", arguments: '{"name":"World"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -125,7 +129,11 @@ describe("hooks", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "From B", toolCalls: [] },
@@ -158,7 +166,11 @@ describe("hooks", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{

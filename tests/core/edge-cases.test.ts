@@ -9,19 +9,12 @@ import {
 	RunAbortedError,
 	StratusError,
 } from "../../src/core/errors";
-import type {
-	Model,
-	ModelRequest,
-	ModelRequestOptions,
-	ModelResponse,
-	StreamEvent,
-} from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
-import { createSession } from "../../src/core/session";
-import { tool } from "../../src/core/tool";
-import { handoff } from "../../src/core/handoff";
-import { subagent } from "../../src/core/subagent";
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
+import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
+import { stream, run } from "../../src/core/run";
+import { createSession } from "../../src/core/session";
+import { subagent } from "../../src/core/subagent";
+import { tool } from "../../src/core/tool";
 
 // ─── Mock helpers ────────────────────────────────────────────────────────
 
@@ -249,7 +242,9 @@ describe("edge: unknown tools", () => {
 		const toolMsgs = result.messages.filter((m) => m.role === "tool");
 		expect(toolMsgs).toHaveLength(2);
 		expect(toolMsgs.some((m) => m.role === "tool" && m.content === "ok")).toBe(true);
-		expect(toolMsgs.some((m) => m.role === "tool" && m.content.includes("Unknown tool"))).toBe(true);
+		expect(toolMsgs.some((m) => m.role === "tool" && m.content.includes("Unknown tool"))).toBe(
+			true,
+		);
 	});
 });
 
@@ -282,9 +277,7 @@ describe("edge: malformed tool arguments", () => {
 		const result = await run(agent, "Search");
 
 		// Should not crash — error goes back to model
-		const toolMsg = result.messages.find(
-			(m) => m.role === "tool" && m.content.includes("Error"),
-		);
+		const toolMsg = result.messages.find((m) => m.role === "tool" && m.content.includes("Error"));
 		expect(toolMsg).toBeDefined();
 		expect(result.output).toBe("I'll try differently.");
 	});
@@ -324,9 +317,7 @@ describe("edge: maxTurns", () => {
 	});
 
 	test("maxTurns=1 with tool call throws", async () => {
-		const model = mockModel([
-			toolCallResponse([{ id: "tc1", name: "t", args: "{}" }]),
-		]);
+		const model = mockModel([toolCallResponse([{ id: "tc1", name: "t", args: "{}" }])]);
 
 		const t = tool({
 			name: "t",
@@ -684,11 +675,7 @@ describe("edge: concurrency", () => {
 
 		const agent = new Agent({ name: "test", model });
 
-		const results = await Promise.all([
-			run(agent, "A"),
-			run(agent, "B"),
-			run(agent, "C"),
-		]);
+		const results = await Promise.all([run(agent, "A"), run(agent, "B"), run(agent, "C")]);
 
 		// All three should complete successfully with non-empty output
 		expect(results).toHaveLength(3);
@@ -707,7 +694,8 @@ describe("edge: sessions", () => {
 
 		// stream() without send() — runs with just system message (or empty messages)
 		session.send("Hello");
-		for await (const _e of session.stream()) {}
+		for await (const _e of session.stream()) {
+		}
 		const result = await session.result;
 		expect(result.output).toBe("Hi");
 	});
@@ -724,7 +712,8 @@ describe("edge: sessions", () => {
 		const session = createSession({ model, instructions: "Be nice." });
 
 		session.send("Hi");
-		for await (const _e of session.stream()) {}
+		for await (const _e of session.stream()) {
+		}
 
 		const snapshot = session.save();
 		expect(snapshot.messages.length).toBeGreaterThanOrEqual(2); // system + user + assistant at minimum
@@ -811,7 +800,7 @@ describe("edge: subagents", () => {
 	test("subagent child failure sends error message back to parent", async () => {
 		const failingChild = new Agent({
 			name: "failing_child",
-			model: mockModel([]),  // No responses — will throw "No more mock responses"
+			model: mockModel([]), // No responses — will throw "No more mock responses"
 		});
 
 		const sa = subagent({
@@ -849,7 +838,9 @@ describe("edge: usage tracking", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [{ id: "tc1", type: "function" as const, function: { name: "t", arguments: "{}" } }],
+				toolCalls: [
+					{ id: "tc1", type: "function" as const, function: { name: "t", arguments: "{}" } },
+				],
 				usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
 			},
 			{

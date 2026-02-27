@@ -2,9 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
 import { createSession, forkSession, resumeSession } from "../../src/core/session";
 
-function mockModel(
-	responses: ModelResponse[],
-): Model & { requests: ModelRequest[] } {
+function mockModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {
 	let callIndex = 0;
 	const requests: ModelRequest[] = [];
 	return {
@@ -34,9 +32,7 @@ function mockModel(
 
 describe("session save/resume/fork", () => {
 	test("save() returns snapshot with correct ID and messages", async () => {
-		const model = mockModel([
-			{ content: "Hello!", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Hello!", toolCalls: [] }]);
 
 		const session = createSession({ model });
 		session.send("Hi");
@@ -53,9 +49,7 @@ describe("session save/resume/fork", () => {
 	});
 
 	test("resumeSession restores same ID and messages", async () => {
-		const model1 = mockModel([
-			{ content: "First reply", toolCalls: [] },
-		]);
+		const model1 = mockModel([{ content: "First reply", toolCalls: [] }]);
 
 		const session1 = createSession({ model: model1 });
 		session1.send("Hello");
@@ -66,9 +60,7 @@ describe("session save/resume/fork", () => {
 
 		const snapshot = session1.save();
 
-		const model2 = mockModel([
-			{ content: "Second reply", toolCalls: [] },
-		]);
+		const model2 = mockModel([{ content: "Second reply", toolCalls: [] }]);
 
 		const session2 = resumeSession(snapshot, { model: model2 });
 		expect(session2.id).toBe(snapshot.id);
@@ -85,9 +77,7 @@ describe("session save/resume/fork", () => {
 	});
 
 	test("forkSession creates new ID, preserves messages", async () => {
-		const model1 = mockModel([
-			{ content: "Original reply", toolCalls: [] },
-		]);
+		const model1 = mockModel([{ content: "Original reply", toolCalls: [] }]);
 
 		const session1 = createSession({ model: model1 });
 		session1.send("Hello");
@@ -98,9 +88,7 @@ describe("session save/resume/fork", () => {
 
 		const snapshot = session1.save();
 
-		const model2 = mockModel([
-			{ content: "Forked reply", toolCalls: [] },
-		]);
+		const model2 = mockModel([{ content: "Forked reply", toolCalls: [] }]);
 
 		const session2 = forkSession(snapshot, { model: model2 });
 		expect(session2.id).not.toBe(snapshot.id);
@@ -117,9 +105,7 @@ describe("session save/resume/fork", () => {
 	});
 
 	test("save() is a deep copy (mutations don't cross)", async () => {
-		const model = mockModel([
-			{ content: "Reply", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Reply", toolCalls: [] }]);
 
 		const session = createSession({ model });
 		session.send("Hello");
@@ -139,9 +125,7 @@ describe("session save/resume/fork", () => {
 	});
 
 	test("save() on closed session throws", async () => {
-		const model = mockModel([
-			{ content: "Reply", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Reply", toolCalls: [] }]);
 
 		const session = createSession({ model });
 		session.close();
@@ -150,9 +134,7 @@ describe("session save/resume/fork", () => {
 	});
 
 	test("save() while streaming throws", async () => {
-		const model = mockModel([
-			{ content: "Reply", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Reply", toolCalls: [] }]);
 
 		const session = createSession({ model });
 		session.send("Hello");

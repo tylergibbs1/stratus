@@ -9,9 +9,7 @@ import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 
-function mockModel(
-	responses: ModelResponse[],
-): Model & { requests: ModelRequest[] } {
+function mockModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {
 	let callIndex = 0;
 	const requests: ModelRequest[] = [];
 	return {
@@ -42,9 +40,7 @@ function mockModel(
 describe("subagents", () => {
 	test("basic subagent execution returns result as tool message", async () => {
 		// Child model responds to the child's prompt
-		const childModel = mockModel([
-			{ content: "Child says hello", toolCalls: [] },
-		]);
+		const childModel = mockModel([{ content: "Child says hello", toolCalls: [] }]);
 
 		const childAgent = new Agent({
 			name: "child",
@@ -121,7 +117,11 @@ describe("subagents", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "run_math", arguments: '{"expr":"2+3"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "run_math", arguments: '{"expr":"2+3"}' },
+					},
 				],
 			},
 			{ content: "Answer is 5", toolCalls: [] },
@@ -136,9 +136,7 @@ describe("subagents", () => {
 		const result = await run(parentAgent, "What is 2+3?");
 
 		expect(result.output).toBe("Answer is 5");
-		const toolMsg = result.messages.find(
-			(m) => m.role === "tool" && m.content === "The sum is 5",
-		);
+		const toolMsg = result.messages.find((m) => m.role === "tool" && m.content === "The sum is 5");
 		expect(toolMsg).toBeDefined();
 	});
 
@@ -170,14 +168,18 @@ describe("subagents", () => {
 			agent: childAgent,
 			inputSchema: z.object({ data: z.string() }),
 			mapInput: (params) => `Processed: ${params.data}`,
-			mapContext: (parentCtx) => ({ childKey: parentCtx.parentKey + "_child" }),
+			mapContext: (parentCtx) => ({ childKey: `${parentCtx.parentKey}_child` }),
 		});
 
 		const parentModel = mockModel([
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"data":"test"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "run_child", arguments: '{"data":"test"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -199,9 +201,7 @@ describe("subagents", () => {
 		const beforeCalls: string[] = [];
 		const afterCalls: string[] = [];
 
-		const childModel = mockModel([
-			{ content: "child result", toolCalls: [] },
-		]);
+		const childModel = mockModel([{ content: "child result", toolCalls: [] }]);
 
 		const childAgent = new Agent({
 			name: "child",
@@ -227,7 +227,11 @@ describe("subagents", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"q":"hello"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "run_child", arguments: '{"q":"hello"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -271,7 +275,11 @@ describe("subagents", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"q":"hello"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "run_child", arguments: '{"q":"hello"}' },
+					},
 				],
 			},
 			{ content: "Handled error", toolCalls: [] },
@@ -293,12 +301,8 @@ describe("subagents", () => {
 	});
 
 	test("multiple subagents, model calls the right one", async () => {
-		const childModelA = mockModel([
-			{ content: "A result", toolCalls: [] },
-		]);
-		const childModelB = mockModel([
-			{ content: "B result", toolCalls: [] },
-		]);
+		const childModelA = mockModel([{ content: "A result", toolCalls: [] }]);
+		const childModelB = mockModel([{ content: "B result", toolCalls: [] }]);
 
 		const agentA = new Agent({ name: "agent_a", model: childModelA });
 		const agentB = new Agent({ name: "agent_b", model: childModelB });
@@ -337,18 +341,14 @@ describe("subagents", () => {
 		const result = await run(parentAgent, "test");
 
 		expect(result.output).toBe("Got B's answer");
-		const toolMsg = result.messages.find(
-			(m) => m.role === "tool" && m.content === "B result",
-		);
+		const toolMsg = result.messages.find((m) => m.role === "tool" && m.content === "B result");
 		expect(toolMsg).toBeDefined();
 		// agentA should NOT have been called
 		expect(childModelA.requests.length).toBe(0);
 	});
 
 	test("tracing spans use 'subagent' type", async () => {
-		const childModel = mockModel([
-			{ content: "child result", toolCalls: [] },
-		]);
+		const childModel = mockModel([{ content: "child result", toolCalls: [] }]);
 
 		const childAgent = new Agent({
 			name: "child",
@@ -389,9 +389,7 @@ describe("subagents", () => {
 	});
 
 	test("session with subagents", async () => {
-		const childModel = mockModel([
-			{ content: "child answer", toolCalls: [] },
-		]);
+		const childModel = mockModel([{ content: "child answer", toolCalls: [] }]);
 
 		const childAgent = new Agent({
 			name: "child",
@@ -408,7 +406,11 @@ describe("subagents", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "run_child", arguments: '{"q":"hello"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "run_child", arguments: '{"q":"hello"}' },
+					},
 				],
 			},
 			{ content: "Session got child answer", toolCalls: [] },
@@ -429,9 +431,7 @@ describe("subagents", () => {
 	});
 
 	test("custom toolName on subagent", async () => {
-		const childModel = mockModel([
-			{ content: "custom result", toolCalls: [] },
-		]);
+		const childModel = mockModel([{ content: "custom result", toolCalls: [] }]);
 
 		const childAgent = new Agent({
 			name: "child",
@@ -450,7 +450,11 @@ describe("subagents", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "ask_child", arguments: '{"question":"hi"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "ask_child", arguments: '{"question":"hi"}' },
+					},
 				],
 			},
 			{ content: "Done", toolCalls: [] },
@@ -465,9 +469,7 @@ describe("subagents", () => {
 		const result = await run(parentAgent, "test");
 		expect(result.output).toBe("Done");
 
-		const toolMsg = result.messages.find(
-			(m) => m.role === "tool" && m.content === "custom result",
-		);
+		const toolMsg = result.messages.find((m) => m.role === "tool" && m.content === "custom result");
 		expect(toolMsg).toBeDefined();
 	});
 });

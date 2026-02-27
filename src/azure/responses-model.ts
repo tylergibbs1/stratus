@@ -39,12 +39,30 @@ const HOSTED_TOOL_EVENT_MAP = new Map<string, { toolType: string; status: Hosted
 	["response.file_search_call.in_progress", { toolType: "file_search", status: "in_progress" }],
 	["response.file_search_call.searching", { toolType: "file_search", status: "searching" }],
 	["response.file_search_call.completed", { toolType: "file_search", status: "completed" }],
-	["response.code_interpreter_call.in_progress", { toolType: "code_interpreter", status: "in_progress" }],
-	["response.code_interpreter_call.interpreting", { toolType: "code_interpreter", status: "interpreting" }],
-	["response.code_interpreter_call.completed", { toolType: "code_interpreter", status: "completed" }],
-	["response.image_generation_call.in_progress", { toolType: "image_generation", status: "in_progress" }],
-	["response.image_generation_call.generating", { toolType: "image_generation", status: "generating" }],
-	["response.image_generation_call.completed", { toolType: "image_generation", status: "completed" }],
+	[
+		"response.code_interpreter_call.in_progress",
+		{ toolType: "code_interpreter", status: "in_progress" },
+	],
+	[
+		"response.code_interpreter_call.interpreting",
+		{ toolType: "code_interpreter", status: "interpreting" },
+	],
+	[
+		"response.code_interpreter_call.completed",
+		{ toolType: "code_interpreter", status: "completed" },
+	],
+	[
+		"response.image_generation_call.in_progress",
+		{ toolType: "image_generation", status: "in_progress" },
+	],
+	[
+		"response.image_generation_call.generating",
+		{ toolType: "image_generation", status: "generating" },
+	],
+	[
+		"response.image_generation_call.completed",
+		{ toolType: "image_generation", status: "completed" },
+	],
 ]);
 
 export class AzureResponsesModel implements Model {
@@ -56,23 +74,16 @@ export class AzureResponsesModel implements Model {
 
 	constructor(config: AzureResponsesModelConfig) {
 		if (config.apiKey && config.azureAdTokenProvider) {
-			throw new StratusError(
-				"Provide either apiKey or azureAdTokenProvider, not both",
-			);
+			throw new StratusError("Provide either apiKey or azureAdTokenProvider, not both");
 		}
 		if (!config.apiKey && !config.azureAdTokenProvider) {
-			throw new StratusError(
-				"Provide either apiKey or azureAdTokenProvider",
-			);
+			throw new StratusError("Provide either apiKey or azureAdTokenProvider");
 		}
 		this.apiKey = config.apiKey;
 		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
 		this.store = config.store ?? false;
-		this.url = resolveResponsesUrl(
-			config.endpoint,
-			config.apiVersion ?? DEFAULT_API_VERSION,
-		);
+		this.url = resolveResponsesUrl(config.endpoint, config.apiVersion ?? DEFAULT_API_VERSION);
 	}
 
 	private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -83,10 +94,7 @@ export class AzureResponsesModel implements Model {
 		return { "api-key": this.apiKey! };
 	}
 
-	async getResponse(
-		request: ModelRequest,
-		options?: ModelRequestOptions,
-	): Promise<ModelResponse> {
+	async getResponse(request: ModelRequest, options?: ModelRequestOptions): Promise<ModelResponse> {
 		const body = this.buildRequestBody(request, false);
 		const response = await this.doFetch(body, options?.signal);
 		const json = await response.json();
@@ -98,161 +106,192 @@ export class AzureResponsesModel implements Model {
 		options?: ModelRequestOptions,
 	): AsyncGenerator<StreamEvent> {
 		const body = this.buildRequestBody(request, true);
-		const response = await this.doFetch(body, options?.signal);
+		const maxSseRetries = 3;
 
-		if (!response.body) {
-			throw new ModelError("Response body is null");
-		}
+		for (let sseAttempt = 0; sseAttempt <= maxSseRetries; sseAttempt++) {
+			const response = await this.doFetch(body, options?.signal);
 
-		let content = "";
-		// Keyed by item.id (the Responses API item identifier), storing call_id for SDK events
-		const toolCalls = new Map<string, { callId: string; name: string; arguments: string }>();
-		let usage: UsageInfo | undefined;
-		let finishReason: FinishReason | undefined;
-		let responseId: string | undefined;
+			if (!response.body) {
+				throw new ModelError("Response body is null");
+			}
 
-		for await (const data of parseSSE(response.body)) {
-			let event: ResponsesStreamEvent;
-			try {
-				event = JSON.parse(data);
-			} catch {
+			let content = "";
+			// Keyed by item.id (the Responses API item identifier), storing call_id for SDK events
+			const toolCalls = new Map<string, { callId: string; name: string; arguments: string }>();
+			let usage: UsageInfo | undefined;
+			let finishReason: FinishReason | undefined;
+			let responseId: string | undefined;
+			// Deferred error from response.failed with no error details —
+			// allows the subsequent `error` SSE event to provide the real message.
+			let deferredFailure: string | undefined;
+			let hasYielded = false;
+			let sseRateLimited = false;
+
+			for await (const data of parseSSE(response.body)) {
+				let event: ResponsesStreamEvent;
+				try {
+					event = JSON.parse(data);
+				} catch {
+					continue;
+				}
+
+				switch (event.type) {
+					case "response.output_text.delta": {
+						const textDelta = event.delta ?? "";
+						content += textDelta;
+						hasYielded = true;
+						yield { type: "content_delta", content: textDelta };
+						break;
+					}
+					case "response.output_item.added": {
+						if (event.item?.type === "function_call") {
+							const itemId = event.item.id ?? "";
+							const callId = event.item.call_id ?? "";
+							const name = event.item.name ?? "";
+							toolCalls.set(itemId, { callId, name, arguments: "" });
+							if (callId && name) {
+								hasYielded = true;
+								yield { type: "tool_call_start", toolCall: { id: callId, name } };
+							}
+						}
+						break;
+					}
+					case "response.function_call_arguments.delta": {
+						const itemId = event.item_id ?? "";
+						const existing = toolCalls.get(itemId);
+						if (existing) {
+							const argDelta = event.delta ?? "";
+							existing.arguments += argDelta;
+							hasYielded = true;
+							yield {
+								type: "tool_call_delta",
+								toolCallId: existing.callId,
+								arguments: argDelta,
+							};
+						}
+						break;
+					}
+					case "response.output_item.done": {
+						if (event.item?.type === "function_call") {
+							const itemId = event.item.id ?? "";
+							const existing = toolCalls.get(itemId);
+							if (existing) {
+								if (event.item.arguments) {
+									existing.arguments = event.item.arguments;
+								}
+								hasYielded = true;
+								yield { type: "tool_call_done", toolCallId: existing.callId };
+							}
+						}
+						break;
+					}
+					// Hosted tool streaming events
+					case "response.web_search_call.in_progress":
+					case "response.web_search_call.searching":
+					case "response.web_search_call.completed":
+					case "response.file_search_call.in_progress":
+					case "response.file_search_call.searching":
+					case "response.file_search_call.completed":
+					case "response.code_interpreter_call.in_progress":
+					case "response.code_interpreter_call.interpreting":
+					case "response.code_interpreter_call.completed":
+					case "response.image_generation_call.in_progress":
+					case "response.image_generation_call.generating":
+					case "response.image_generation_call.completed": {
+						const mapped = HOSTED_TOOL_EVENT_MAP.get(event.type);
+						if (mapped) {
+							hasYielded = true;
+							yield { type: "hosted_tool_call", toolType: mapped.toolType, status: mapped.status };
+						}
+						break;
+					}
+					case "response.completed": {
+						const resp = event.response;
+						if (resp?.id) {
+							responseId = resp.id;
+						}
+						if (resp?.usage) {
+							usage = {
+								promptTokens: resp.usage.input_tokens,
+								completionTokens: resp.usage.output_tokens,
+								totalTokens: resp.usage.total_tokens,
+								...(resp.usage.input_tokens_details?.cached_tokens !== undefined
+									? { cacheReadTokens: resp.usage.input_tokens_details.cached_tokens }
+									: {}),
+								...(resp.usage.output_tokens_details?.reasoning_tokens !== undefined
+									? { reasoningTokens: resp.usage.output_tokens_details.reasoning_tokens }
+									: {}),
+							};
+						}
+						finishReason = mapStatus(resp?.status);
+						break;
+					}
+					case "response.failed": {
+						const errorMsg = event.response?.error?.message;
+						if (errorMsg) {
+							throw new ModelError(`Azure API response failed: ${errorMsg}`, { status: 200 });
+						}
+						// error is null — defer to let the subsequent `error` event
+						// provide the real details (e.g. too_many_requests).
+						deferredFailure = "Response failed";
+						break;
+					}
+					case "error": {
+						const err = event.error;
+						const errorType = err?.type ?? "unknown";
+						const errorMsg = err?.message ?? "Unknown error";
+						if (errorType === "too_many_requests") {
+							if (!hasYielded && sseAttempt < maxSseRetries) {
+								sseRateLimited = true;
+								break; // exit SSE loop, retry in outer loop
+							}
+							throw new ModelError(`Azure API rate limited (SSE): ${errorMsg}`, { status: 429 });
+						}
+						throw new ModelError(`Azure API stream error (${errorType}): ${errorMsg}`, {
+							status: 200,
+						});
+					}
+				}
+			}
+
+			// SSE rate limited before any events were yielded — retry with backoff
+			if (sseRateLimited) {
+				const retryAfterHeader = response.headers.get("retry-after");
+				const waitMs = retryAfterHeader
+					? Number.parseInt(retryAfterHeader, 10) * 1000
+					: Math.min(10000 * 2 ** sseAttempt, 60000);
+				await new Promise((r) => setTimeout(r, waitMs));
 				continue;
 			}
 
-			switch (event.type) {
-				case "response.output_text.delta": {
-					const textDelta = event.delta ?? "";
-					content += textDelta;
-					yield { type: "content_delta", content: textDelta };
-					break;
-				}
-				case "response.output_item.added": {
-					if (event.item?.type === "function_call") {
-						const itemId = event.item.id ?? "";
-						const callId = event.item.call_id ?? "";
-						const name = event.item.name ?? "";
-						toolCalls.set(itemId, { callId, name, arguments: "" });
-						if (callId && name) {
-							yield { type: "tool_call_start", toolCall: { id: callId, name } };
-						}
-					}
-					break;
-				}
-				case "response.function_call_arguments.delta": {
-					const itemId = event.item_id ?? "";
-					const existing = toolCalls.get(itemId);
-					if (existing) {
-						const argDelta = event.delta ?? "";
-						existing.arguments += argDelta;
-						yield {
-							type: "tool_call_delta",
-							toolCallId: existing.callId,
-							arguments: argDelta,
-						};
-					}
-					break;
-				}
-				case "response.output_item.done": {
-					if (event.item?.type === "function_call") {
-						const itemId = event.item.id ?? "";
-						const existing = toolCalls.get(itemId);
-						if (existing) {
-							if (event.item.arguments) {
-								existing.arguments = event.item.arguments;
-							}
-							yield { type: "tool_call_done", toolCallId: existing.callId };
-						}
-					}
-					break;
-				}
-				// Hosted tool streaming events
-				case "response.web_search_call.in_progress":
-				case "response.web_search_call.searching":
-				case "response.web_search_call.completed":
-				case "response.file_search_call.in_progress":
-				case "response.file_search_call.searching":
-				case "response.file_search_call.completed":
-				case "response.code_interpreter_call.in_progress":
-				case "response.code_interpreter_call.interpreting":
-				case "response.code_interpreter_call.completed":
-				case "response.image_generation_call.in_progress":
-				case "response.image_generation_call.generating":
-				case "response.image_generation_call.completed": {
-					const mapped = HOSTED_TOOL_EVENT_MAP.get(event.type);
-					if (mapped) {
-						yield { type: "hosted_tool_call", toolType: mapped.toolType, status: mapped.status };
-					}
-					break;
-				}
-				case "response.completed": {
-					const resp = event.response;
-					if (resp?.id) {
-						responseId = resp.id;
-					}
-					if (resp?.usage) {
-						usage = {
-							promptTokens: resp.usage.input_tokens,
-							completionTokens: resp.usage.output_tokens,
-							totalTokens: resp.usage.total_tokens,
-							...(resp.usage.input_tokens_details?.cached_tokens !== undefined
-								? { cacheReadTokens: resp.usage.input_tokens_details.cached_tokens }
-								: {}),
-							...(resp.usage.output_tokens_details?.reasoning_tokens !== undefined
-								? { reasoningTokens: resp.usage.output_tokens_details.reasoning_tokens }
-								: {}),
-						};
-					}
-					finishReason = mapStatus(resp?.status);
-					break;
-				}
-				case "response.failed": {
-					const errorMsg = event.response?.error?.message
-						?? "Response failed";
-					throw new ModelError(
-						`Azure API response failed: ${errorMsg}`,
-						{ status: 200 },
-					);
-				}
-				case "error": {
-					const err = event.error;
-					const errorType = err?.type ?? "unknown";
-					const errorMsg = err?.message ?? "Unknown error";
-					if (errorType === "too_many_requests") {
-						throw new ModelError(
-							`Azure API rate limited (SSE): ${errorMsg}`,
-							{ status: 429 },
-						);
-					}
-					throw new ModelError(
-						`Azure API stream error (${errorType}): ${errorMsg}`,
-						{ status: 200 },
-					);
-				}
+			// If response.failed had no error details and no subsequent error event provided one
+			if (deferredFailure) {
+				throw new ModelError(`Azure API response failed: ${deferredFailure}`, { status: 200 });
 			}
-		}
 
-		const finalToolCalls: ToolCall[] = Array.from(toolCalls.values()).map((tc) => ({
-			id: tc.callId,
-			type: "function" as const,
-			function: { name: tc.name, arguments: tc.arguments },
-		}));
+			const finalToolCalls: ToolCall[] = Array.from(toolCalls.values()).map((tc) => ({
+				id: tc.callId,
+				type: "function" as const,
+				function: { name: tc.name, arguments: tc.arguments },
+			}));
 
-		yield {
-			type: "done",
-			response: {
-				content: content || null,
-				toolCalls: finalToolCalls,
-				usage,
-				finishReason,
-				responseId,
-			},
-		};
+			yield {
+				type: "done",
+				response: {
+					content: content || null,
+					toolCalls: finalToolCalls,
+					usage,
+					finishReason,
+					responseId,
+				},
+			};
+			return; // success — exit retry loop
+		} // end SSE retry loop
+
+		throw new ModelError("Max SSE retries exceeded for rate-limited request", { status: 429 });
 	}
 
-	private buildRequestBody(
-		request: ModelRequest,
-		stream: boolean,
-	): Record<string, unknown> {
+	private buildRequestBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
 		// ModelSettings.store overrides config-level store
 		const effectiveStore = request.modelSettings?.store ?? this.store;
 		const body: Record<string, unknown> = {
@@ -308,8 +347,7 @@ export class AzureResponsesModel implements Model {
 				if (s.reasoningSummary !== undefined) reasoning.summary = s.reasoningSummary;
 				body.reasoning = reasoning;
 			}
-			if (s.promptCacheKey !== undefined)
-				body.prompt_cache_key = s.promptCacheKey;
+			if (s.promptCacheKey !== undefined) body.prompt_cache_key = s.promptCacheKey;
 			if (s.truncation !== undefined) body.truncation = s.truncation;
 			if (s.store !== undefined) body.store = s.store;
 			if (s.metadata !== undefined) body.metadata = s.metadata;
@@ -319,28 +357,43 @@ export class AzureResponsesModel implements Model {
 		return body;
 	}
 
-	private async doFetch(
-		body: Record<string, unknown>,
-		signal?: AbortSignal,
-	): Promise<Response> {
+	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
 		const maxRetries = 3;
+		let lastError: unknown;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
-			const authHeaders = await this.getAuthHeaders();
-			const response = await fetch(this.url, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...authHeaders,
-				},
-				body: JSON.stringify(body),
-				signal,
-			});
+			let response: Response;
+			try {
+				const authHeaders = await this.getAuthHeaders();
+				response = await fetch(this.url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						...authHeaders,
+					},
+					body: JSON.stringify(body),
+					signal,
+				});
+			} catch (fetchErr) {
+				// Network errors (timeout, connection reset, DNS failure)
+				// are retryable unless the caller aborted.
+				if (signal?.aborted) throw fetchErr;
+				lastError = fetchErr;
+				if (attempt < maxRetries) {
+					const waitMs = Math.min(5000 * 2 ** attempt, 30000);
+					await new Promise((r) => setTimeout(r, waitMs));
+					continue;
+				}
+				throw new ModelError(
+					`Azure API network error after ${maxRetries + 1} attempts: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+					{ cause: fetchErr },
+				);
+			}
 
 			if (response.status === 429 && attempt < maxRetries) {
 				const retryAfter = response.headers.get("retry-after");
 				const waitMs = retryAfter
 					? Number.parseInt(retryAfter, 10) * 1000
-					: Math.min(1000 * 2 ** attempt, 30000);
+					: Math.min(5000 * 2 ** attempt, 30000);
 				await new Promise((r) => setTimeout(r, waitMs));
 				continue;
 			}
@@ -352,7 +405,9 @@ export class AzureResponsesModel implements Model {
 			return response;
 		}
 
-		throw new ModelError("Max retries exceeded for Azure API request");
+		throw new ModelError(
+			`Max retries exceeded for Azure API request${lastError instanceof Error ? `: ${lastError.message}` : ""}`,
+		);
 	}
 
 	private async handleErrorResponse(response: Response): Promise<never> {
@@ -398,9 +453,7 @@ export class AzureResponsesModel implements Model {
 		const toolCalls = extractToolCalls(output);
 		const content = extractTextContent(output);
 
-		const usage: UsageInfo | undefined = json.usage
-			? parseResponsesUsage(json.usage)
-			: undefined;
+		const usage: UsageInfo | undefined = json.usage ? parseResponsesUsage(json.usage) : undefined;
 
 		const finishReason: FinishReason = toolCalls.length > 0 ? "tool_calls" : "stop";
 
@@ -514,9 +567,7 @@ function convertMessages(messages: ChatMessage[]): {
 	return { instructions, input };
 }
 
-function convertUserContent(
-	content: string | ContentPart[],
-): ResponsesContentPart[] {
+function convertUserContent(content: string | ContentPart[]): ResponsesContentPart[] {
 	if (typeof content === "string") {
 		return [{ type: "input_text", text: content }];
 	}
@@ -535,14 +586,14 @@ function convertUserContent(
 function isFunctionToolDefinition(
 	def: ToolDefinition | HostedToolDefinition,
 ): def is ToolDefinition {
-	return "function" in def && (def as ToolDefinition).function != null && typeof (def as ToolDefinition).function === "object";
+	return (
+		"function" in def &&
+		(def as ToolDefinition).function != null &&
+		typeof (def as ToolDefinition).function === "object"
+	);
 }
 
-type ResponsesToolChoice =
-	| "auto"
-	| "none"
-	| "required"
-	| { type: "function"; name: string };
+type ResponsesToolChoice = "auto" | "none" | "required" | { type: "function"; name: string };
 
 function convertToolChoice(toolChoice: ToolChoice): ResponsesToolChoice {
 	if (typeof toolChoice === "string") return toolChoice;
@@ -551,9 +602,7 @@ function convertToolChoice(toolChoice: ToolChoice): ResponsesToolChoice {
 	return { type: toolChoice.type, name: toolChoice.function.name };
 }
 
-function flattenToolDefinition(
-	def: ToolDefinition,
-): Record<string, unknown> {
+function flattenToolDefinition(def: ToolDefinition): Record<string, unknown> {
 	return {
 		type: "function",
 		name: def.function.name,
@@ -563,9 +612,7 @@ function flattenToolDefinition(
 	};
 }
 
-function convertResponseFormat(
-	format: ResponseFormat,
-): Record<string, unknown> | undefined {
+function convertResponseFormat(format: ResponseFormat): Record<string, unknown> | undefined {
 	if (format.type === "text") {
 		return undefined;
 	}
@@ -639,7 +686,10 @@ type ResponsesStreamEvent =
 	| { type: "response.output_item.added"; item?: ResponsesStreamItem }
 	| { type: "response.function_call_arguments.delta"; item_id?: string; delta?: string }
 	| { type: "response.output_item.done"; item?: ResponsesStreamItem }
-	| { type: "response.completed"; response?: { id?: string; status?: string; usage?: ResponsesUsage } }
+	| {
+			type: "response.completed";
+			response?: { id?: string; status?: string; usage?: ResponsesUsage };
+	  }
 	// Hosted tool streaming events
 	| { type: "response.web_search_call.in_progress" }
 	| { type: "response.web_search_call.searching" }
@@ -654,5 +704,12 @@ type ResponsesStreamEvent =
 	| { type: "response.image_generation_call.generating" }
 	| { type: "response.image_generation_call.completed" }
 	// Error / failure events (e.g. SSE-level 429)
-	| { type: "response.failed"; response?: { id?: string; status?: string; error?: { message?: string; type?: string; code?: string } } }
+	| {
+			type: "response.failed";
+			response?: {
+				id?: string;
+				status?: string;
+				error?: { message?: string; type?: string; code?: string };
+			};
+	  }
 	| { type: "error"; error?: { type?: string; code?: string; message?: string } };

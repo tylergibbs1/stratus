@@ -41,8 +41,8 @@ describe("zodToJsonSchema", () => {
 		});
 
 		const props = getProps(zodToJsonSchema(schema));
-		expect(props["items"]!.type).toBe("array");
-		expect(props["items"]!.items).toEqual({ type: "string" });
+		expect(props.items!.type).toBe("array");
+		expect(props.items!.items).toEqual({ type: "string" });
 	});
 
 	test("converts enums", () => {
@@ -51,7 +51,7 @@ describe("zodToJsonSchema", () => {
 		});
 
 		const props = getProps(zodToJsonSchema(schema));
-		expect(props["color"]!.enum).toEqual(["red", "green", "blue"]);
+		expect(props.color!.enum).toEqual(["red", "green", "blue"]);
 	});
 
 	test("converts booleans", () => {
@@ -60,7 +60,7 @@ describe("zodToJsonSchema", () => {
 		});
 
 		const props = getProps(zodToJsonSchema(schema));
-		expect(props["active"]!.type).toBe("boolean");
+		expect(props.active!.type).toBe("boolean");
 	});
 
 	test("handles descriptions", () => {
@@ -69,7 +69,7 @@ describe("zodToJsonSchema", () => {
 		});
 
 		const props = getProps(zodToJsonSchema(schema));
-		expect(props["name"]!.description).toBe("The user's name");
+		expect(props.name!.description).toBe("The user's name");
 	});
 
 	test("handles nested objects", () => {
@@ -81,6 +81,6 @@ describe("zodToJsonSchema", () => {
 		});
 
 		const props = getProps(zodToJsonSchema(schema));
-		expect(props["address"]!.type).toBe("object");
+		expect(props.address!.type).toBe("object");
 	});
 });

@@ -2,9 +2,9 @@ import type { z } from "zod";
 import type { InputGuardrail, OutputGuardrail } from "./guardrails";
 import { type Handoff, handoff as normalizeHandoff } from "./handoff";
 import type { AgentHooks } from "./hooks";
+import type { AgentTool } from "./hosted-tool";
 import type { Model } from "./model";
 import type { SubAgent } from "./subagent";
-import type { AgentTool } from "./hosted-tool";
 import type { ModelSettings, ResponseFormat, ToolUseBehavior } from "./types";
 import { zodToJsonSchema } from "./utils/zod";
 

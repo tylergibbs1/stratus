@@ -101,10 +101,10 @@ describe("AzureChatCompletionsModel auth", () => {
 			azureAdTokenProvider: provider,
 		});
 
-		const { getHeaders: getHeaders1 } = captureHeaders();
+		const { getHeaders: _getHeaders1 } = captureHeaders();
 		// Override to use responses model response for second call
 		// @ts-expect-error -- mock
-		globalThis.fetch = mock((_url: string, init: RequestInit) => {
+		globalThis.fetch = mock((_url: string, _init: RequestInit) => {
 			return Promise.resolve({
 				ok: true,
 				status: 200,

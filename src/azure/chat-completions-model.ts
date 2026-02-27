@@ -30,14 +30,10 @@ export class AzureChatCompletionsModel implements Model {
 
 	constructor(config: AzureChatCompletionsModelConfig) {
 		if (config.apiKey && config.azureAdTokenProvider) {
-			throw new StratusError(
-				"Provide either apiKey or azureAdTokenProvider, not both",
-			);
+			throw new StratusError("Provide either apiKey or azureAdTokenProvider, not both");
 		}
 		if (!config.apiKey && !config.azureAdTokenProvider) {
-			throw new StratusError(
-				"Provide either apiKey or azureAdTokenProvider",
-			);
+			throw new StratusError("Provide either apiKey or azureAdTokenProvider");
 		}
 		this.apiKey = config.apiKey;
 		this.tokenProvider = config.azureAdTokenProvider;
@@ -57,10 +53,7 @@ export class AzureChatCompletionsModel implements Model {
 		return { "api-key": this.apiKey! };
 	}
 
-	async getResponse(
-		request: ModelRequest,
-		options?: ModelRequestOptions,
-	): Promise<ModelResponse> {
+	async getResponse(request: ModelRequest, options?: ModelRequestOptions): Promise<ModelResponse> {
 		const body = this.buildRequestBody(request, false);
 		const response = await this.doFetch(body, options?.signal);
 		const json = await response.json();
@@ -167,10 +160,7 @@ export class AzureChatCompletionsModel implements Model {
 		};
 	}
 
-	private buildRequestBody(
-		request: ModelRequest,
-		stream: boolean,
-	): Record<string, unknown> {
+	private buildRequestBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
 		const body: Record<string, unknown> = {
 			model: this.deployment,
 			messages: request.messages.map(serializeMessage),
@@ -195,8 +185,7 @@ export class AzureChatCompletionsModel implements Model {
 			if (s.temperature !== undefined) body.temperature = s.temperature;
 			if (s.topP !== undefined) body.top_p = s.topP;
 			if (s.maxTokens !== undefined) body.max_tokens = s.maxTokens;
-			if (s.maxCompletionTokens !== undefined)
-				body.max_completion_tokens = s.maxCompletionTokens;
+			if (s.maxCompletionTokens !== undefined) body.max_completion_tokens = s.maxCompletionTokens;
 			if (s.stop !== undefined) body.stop = s.stop;
 			if (s.presencePenalty !== undefined) body.presence_penalty = s.presencePenalty;
 			if (s.frequencyPenalty !== undefined) body.frequency_penalty = s.frequencyPenalty;
@@ -215,10 +204,7 @@ export class AzureChatCompletionsModel implements Model {
 		return body;
 	}
 
-	private async doFetch(
-		body: Record<string, unknown>,
-		signal?: AbortSignal,
-	): Promise<Response> {
+	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
 		const maxRetries = 3;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			const authHeaders = await this.getAuthHeaders();

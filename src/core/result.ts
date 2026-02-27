@@ -1,6 +1,6 @@
 import type { Agent } from "./agent";
-import type { FinishReason, UsageInfo } from "./model";
 import type { GuardrailRunResult } from "./guardrails";
+import type { FinishReason, UsageInfo } from "./model";
 import type { ChatMessage } from "./types";
 
 export interface RunResultOptions<TOutput = undefined> {

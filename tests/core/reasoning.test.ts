@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import type { ChatMessage, DeveloperMessage } from "../../src/core/types";
 
@@ -43,7 +43,13 @@ describe("reasoning models", () => {
 	test("developer messages are passed through to model", async () => {
 		const capture: { requests: ModelRequest[] } = { requests: [] };
 		const model = mockModel(
-			[{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }],
+			[
+				{
+					content: "Hello!",
+					toolCalls: [],
+					usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+				},
+			],
 			capture,
 		);
 
@@ -62,7 +68,13 @@ describe("reasoning models", () => {
 	test("reasoningEffort is set in modelSettings", async () => {
 		const capture: { requests: ModelRequest[] } = { requests: [] };
 		const model = mockModel(
-			[{ content: "Done", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }],
+			[
+				{
+					content: "Done",
+					toolCalls: [],
+					usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+				},
+			],
 			capture,
 		);
 
@@ -79,7 +91,13 @@ describe("reasoning models", () => {
 	test("maxCompletionTokens is set in modelSettings", async () => {
 		const capture: { requests: ModelRequest[] } = { requests: [] };
 		const model = mockModel(
-			[{ content: "Done", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }],
+			[
+				{
+					content: "Done",
+					toolCalls: [],
+					usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+				},
+			],
 			capture,
 		);
 

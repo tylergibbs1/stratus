@@ -11,16 +11,12 @@ describe("detectEndpointKind", () => {
 	});
 
 	test("cognitiveservices.azure.com → standard", () => {
-		expect(
-			detectEndpointKind("https://myresource.cognitiveservices.azure.com"),
-		).toBe("standard");
+		expect(detectEndpointKind("https://myresource.cognitiveservices.azure.com")).toBe("standard");
 	});
 
 	test("services.ai.azure.com → foundry", () => {
 		expect(
-			detectEndpointKind(
-				"https://myproject.services.ai.azure.com/api/projects/my-project",
-			),
+			detectEndpointKind("https://myproject.services.ai.azure.com/api/projects/my-project"),
 		).toBe("foundry");
 	});
 
@@ -33,11 +29,9 @@ describe("detectEndpointKind", () => {
 	});
 
 	test("full URL with /openai/v1/responses → full_url", () => {
-		expect(
-			detectEndpointKind(
-				"https://myresource.openai.azure.com/openai/v1/responses",
-			),
-		).toBe("full_url");
+		expect(detectEndpointKind("https://myresource.openai.azure.com/openai/v1/responses")).toBe(
+			"full_url",
+		);
 	});
 
 	test("full URL with /openai/responses → full_url", () => {
@@ -97,10 +91,7 @@ describe("resolveChatCompletionsUrl", () => {
 
 describe("resolveResponsesUrl", () => {
 	test("standard endpoint", () => {
-		const url = resolveResponsesUrl(
-			"https://myresource.openai.azure.com",
-			"2025-04-01-preview",
-		);
+		const url = resolveResponsesUrl("https://myresource.openai.azure.com", "2025-04-01-preview");
 		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
 	});
 
@@ -123,17 +114,13 @@ describe("resolveResponsesUrl", () => {
 	});
 
 	test("full URL passed through as-is", () => {
-		const fullUrl =
-			"https://myresource.openai.azure.com/openai/v1/responses";
+		const fullUrl = "https://myresource.openai.azure.com/openai/v1/responses";
 		const url = resolveResponsesUrl(fullUrl, "ignored");
 		expect(url).toBe(fullUrl);
 	});
 
 	test("trailing slash normalized", () => {
-		const url = resolveResponsesUrl(
-			"https://myresource.openai.azure.com/",
-			"2025-04-01-preview",
-		);
+		const url = resolveResponsesUrl("https://myresource.openai.azure.com/", "2025-04-01-preview");
 		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
 	});
 });

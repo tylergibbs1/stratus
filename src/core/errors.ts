@@ -66,7 +66,9 @@ export class MaxBudgetExceededError extends StratusError {
 	readonly spentUsd: number;
 
 	constructor(budgetUsd: number, spentUsd: number) {
-		super(`Agent exceeded maximum budget ($${budgetUsd.toFixed(4)}, spent $${spentUsd.toFixed(4)})`);
+		super(
+			`Agent exceeded maximum budget ($${budgetUsd.toFixed(4)}, spent $${spentUsd.toFixed(4)})`,
+		);
 		this.name = "MaxBudgetExceededError";
 		this.budgetUsd = budgetUsd;
 		this.spentUsd = spentUsd;

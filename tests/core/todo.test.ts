@@ -12,7 +12,12 @@ describe("TodoList", () => {
 		const list = new TodoList();
 		const todos: Todo[] = [
 			{ id: "1", content: "First task", status: "pending" },
-			{ id: "2", content: "Second task", status: "in_progress", activeForm: "Working on second task" },
+			{
+				id: "2",
+				content: "Second task",
+				status: "in_progress",
+				activeForm: "Working on second task",
+			},
 		];
 		list.write(todos);
 		expect(list.todos).toEqual(todos);
@@ -109,12 +114,15 @@ describe("todoTool", () => {
 		const list = new TodoList();
 		const t = todoTool(list);
 
-		await t.execute({}, {
-			todos: [
-				{ id: "1", content: "Build feature", status: "pending" },
-				{ id: "2", content: "Write tests", status: "in_progress", activeForm: "Writing tests" },
-			],
-		});
+		await t.execute(
+			{},
+			{
+				todos: [
+					{ id: "1", content: "Build feature", status: "pending" },
+					{ id: "2", content: "Write tests", status: "in_progress", activeForm: "Writing tests" },
+				],
+			},
+		);
 
 		expect(list.todos).toHaveLength(2);
 		expect(list.todos[0]!.content).toBe("Build feature");
@@ -125,13 +133,16 @@ describe("todoTool", () => {
 		const list = new TodoList();
 		const t = todoTool(list);
 
-		const result = await t.execute({}, {
-			todos: [
-				{ id: "1", content: "Done", status: "completed" },
-				{ id: "2", content: "Active", status: "in_progress", activeForm: "Working" },
-				{ id: "3", content: "Todo", status: "pending" },
-			],
-		});
+		const result = await t.execute(
+			{},
+			{
+				todos: [
+					{ id: "1", content: "Done", status: "completed" },
+					{ id: "2", content: "Active", status: "in_progress", activeForm: "Working" },
+					{ id: "3", content: "Todo", status: "pending" },
+				],
+			},
+		);
 
 		expect(result).toContain("1/3 completed");
 		expect(result).toContain("1 in progress");
@@ -144,9 +155,12 @@ describe("todoTool", () => {
 		list.onUpdate(listener);
 
 		const t = todoTool(list);
-		await t.execute({}, {
-			todos: [{ id: "1", content: "Task", status: "pending" }],
-		});
+		await t.execute(
+			{},
+			{
+				todos: [{ id: "1", content: "Task", status: "pending" }],
+			},
+		);
 
 		expect(listener).toHaveBeenCalledTimes(1);
 	});

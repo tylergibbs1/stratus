@@ -15,11 +15,8 @@ import {
 	runToolInputGuardrails,
 	runToolOutputGuardrails,
 } from "./guardrails";
-import type {
-	GuardrailRunResult,
-	ToolInputGuardrail,
-	ToolOutputGuardrail,
-} from "./guardrails";
+import type { GuardrailRunResult, ToolInputGuardrail, ToolOutputGuardrail } from "./guardrails";
+import { handoffToDefinition } from "./handoff";
 import type {
 	AfterToolCallHook,
 	BeforeToolCallHook,
@@ -30,16 +27,29 @@ import type {
 	ToolCallDecision,
 	ToolMatcher,
 } from "./hooks";
-import { handoffToDefinition } from "./handoff";
-import { isHostedTool, isFunctionTool } from "./hosted-tool";
-import type { FinishReason, Model, ModelRequest, ModelResponse, StreamEvent, UsageInfo } from "./model";
+import { isFunctionTool, isHostedTool } from "./hosted-tool";
+import type {
+	FinishReason,
+	Model,
+	ModelRequest,
+	ModelResponse,
+	StreamEvent,
+	UsageInfo,
+} from "./model";
+import { RunResult } from "./result";
 import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { SubAgent } from "./subagent";
-import { RunResult } from "./result";
 import { toolToDefinition } from "./tool";
 
 import { getCurrentTrace } from "./tracing";
-import type { AssistantMessage, ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition, ToolMessage } from "./types";
+import type {
+	AssistantMessage,
+	ChatMessage,
+	HostedToolDefinition,
+	ToolCall,
+	ToolDefinition,
+	ToolMessage,
+} from "./types";
 
 const DEFAULT_MAX_TURNS = 10;
 
@@ -49,7 +59,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function extractToolCallDecision(
-	result: void | ToolCallDecision | undefined,
+	result: undefined | ToolCallDecision | undefined,
 ): ToolCallDecision | undefined {
 	if (result && typeof result === "object" && "decision" in result) {
 		return result;
@@ -58,7 +68,7 @@ function extractToolCallDecision(
 }
 
 function extractHandoffDecision(
-	result: void | HandoffDecision | undefined,
+	result: undefined | HandoffDecision | undefined,
 ): HandoffDecision | undefined {
 	if (result && typeof result === "object" && "decision" in result) {
 		return result;
@@ -229,11 +239,7 @@ function checkBudget(ctx: RunContext<any>, maxBudgetUsd: number | undefined): vo
 	}
 }
 
-function formatToolError(
-	toolName: string,
-	error: unknown,
-	formatter?: ToolErrorFormatter,
-): string {
+function formatToolError(toolName: string, error: unknown, formatter?: ToolErrorFormatter): string {
 	if (formatter) return formatter(toolName, error);
 	return `Error executing tool "${toolName}": ${getErrorMessage(error)}`;
 }
@@ -276,12 +282,20 @@ export async function run<TContext, TOutput = undefined>(
 		if (trace) {
 			const span = trace.startSpan("input_guardrails", "guardrail");
 			try {
-				inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+				inputGuardrailResults = await runInputGuardrails(
+					agent.inputGuardrails,
+					inputText,
+					ctx.context,
+				);
 			} finally {
 				trace.endSpan(span);
 			}
 		} else {
-			inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+			inputGuardrailResults = await runInputGuardrails(
+				agent.inputGuardrails,
+				inputText,
+				ctx.context,
+			);
 		}
 	}
 
@@ -358,7 +372,11 @@ export async function run<TContext, TOutput = undefined>(
 		// Fire onLlmEnd hooks
 		const llmEndInfo = { content: response.content, toolCallCount: response.toolCalls.length };
 		if (currentAgent.hooks.onLlmEnd) {
-			await currentAgent.hooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
+			await currentAgent.hooks.onLlmEnd({
+				agent: currentAgent,
+				response: llmEndInfo,
+				context: ctx.context,
+			});
 		}
 		if (runHooks?.onLlmEnd) {
 			await runHooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
@@ -396,11 +414,20 @@ export async function run<TContext, TOutput = undefined>(
 		if (response.toolCalls.length === 0) {
 			// Fire run-level onAgentEnd
 			if (runHooks?.onAgentEnd) {
-				await runHooks.onAgentEnd({ agent: currentAgent, output: response.content ?? "", context: ctx.context });
+				await runHooks.onAgentEnd({
+					agent: currentAgent,
+					output: response.content ?? "",
+					context: ctx.context,
+				});
 			}
 			return buildFinalResult(
-				agent, currentAgent, messages, ctx, trace,
-				lastFinishReason, lastResponseId,
+				agent,
+				currentAgent,
+				messages,
+				ctx,
+				trace,
+				lastFinishReason,
+				lastResponseId,
 				inputGuardrailResults,
 			);
 		}
@@ -453,9 +480,7 @@ export async function run<TContext, TOutput = undefined>(
 					if (lastToolMsg && lastToolMsg.role === "tool") {
 						messages[messages.length - 1] = {
 							...lastToolMsg,
-							content:
-								decision.reason ??
-								`Handoff to ${handoffAgent.name} was denied`,
+							content: decision.reason ?? `Handoff to ${handoffAgent.name} was denied`,
 						};
 					}
 				}
@@ -464,12 +489,20 @@ export async function run<TContext, TOutput = undefined>(
 			if (allowHandoff) {
 				// Fire run-level onAgentEnd for current agent
 				if (runHooks?.onAgentEnd) {
-					await runHooks.onAgentEnd({ agent: currentAgent, output: response.content ?? "", context: ctx.context });
+					await runHooks.onAgentEnd({
+						agent: currentAgent,
+						output: response.content ?? "",
+						context: ctx.context,
+					});
 				}
 
 				// Fire run-level onHandoff
 				if (runHooks?.onHandoff) {
-					await runHooks.onHandoff({ fromAgent: currentAgent, toAgent: handoffAgent, context: ctx.context });
+					await runHooks.onHandoff({
+						fromAgent: currentAgent,
+						toAgent: handoffAgent,
+						context: ctx.context,
+					});
 				}
 
 				if (trace) {
@@ -536,7 +569,8 @@ export async function run<TContext, TOutput = undefined>(
 	throw new MaxTurnsExceededError(maxTurns);
 }
 
-export interface StreamOptions<TContext, TOutput = undefined> extends RunOptions<TContext, TOutput> {}
+export interface StreamOptions<TContext, TOutput = undefined>
+	extends RunOptions<TContext, TOutput> {}
 
 export interface StreamedRunResult<TOutput = undefined> {
 	stream: AsyncGenerator<StreamEvent>;
@@ -601,12 +635,20 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			if (trace) {
 				const span = trace.startSpan("input_guardrails", "guardrail");
 				try {
-					inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+					inputGuardrailResults = await runInputGuardrails(
+						agent.inputGuardrails,
+						inputText,
+						ctx.context,
+					);
 				} finally {
 					trace.endSpan(span);
 				}
 			} else {
-				inputGuardrailResults = await runInputGuardrails(agent.inputGuardrails, inputText, ctx.context);
+				inputGuardrailResults = await runInputGuardrails(
+					agent.inputGuardrails,
+					inputText,
+					ctx.context,
+				);
 			}
 		}
 
@@ -654,7 +696,11 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 			// Fire onLlmStart hooks
 			if (currentAgent.hooks.onLlmStart) {
-				await currentAgent.hooks.onLlmStart({ agent: currentAgent, messages, context: ctx.context });
+				await currentAgent.hooks.onLlmStart({
+					agent: currentAgent,
+					messages,
+					context: ctx.context,
+				});
 			}
 			if (runHooks?.onLlmStart) {
 				await runHooks.onLlmStart({ agent: currentAgent, request, context: ctx.context });
@@ -676,21 +722,32 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			}
 
 			// Fire onLlmEnd hooks
-			const llmEndInfo = { content: finalResponse!.content, toolCallCount: finalResponse!.toolCalls.length };
+			const llmEndInfo = {
+				content: finalResponse?.content,
+				toolCallCount: finalResponse?.toolCalls.length,
+			};
 			if (currentAgent.hooks.onLlmEnd) {
-				await currentAgent.hooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
+				await currentAgent.hooks.onLlmEnd({
+					agent: currentAgent,
+					response: llmEndInfo,
+					context: ctx.context,
+				});
 			}
 			if (runHooks?.onLlmEnd) {
-				await runHooks.onLlmEnd({ agent: currentAgent, response: llmEndInfo, context: ctx.context });
+				await runHooks.onLlmEnd({
+					agent: currentAgent,
+					response: llmEndInfo,
+					context: ctx.context,
+				});
 			}
 
 			checkAborted(signal);
-			lastFinishReason = finalResponse!.finishReason;
-			if (finalResponse!.responseId) lastResponseId = finalResponse!.responseId;
-			ctx.addUsage(finalResponse!.usage);
+			lastFinishReason = finalResponse?.finishReason;
+			if (finalResponse?.responseId) lastResponseId = finalResponse?.responseId;
+			ctx.addUsage(finalResponse?.usage);
 			ctx.numTurns++;
 
-			applyTurnCost(ctx, finalResponse!.usage, costEstimator);
+			applyTurnCost(ctx, finalResponse?.usage, costEstimator);
 
 			// Check budget after each model call
 			try {
@@ -708,20 +765,27 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 			const assistantMsg: AssistantMessage = {
 				role: "assistant",
-				content: finalResponse!.content,
-				...(finalResponse!.toolCalls.length > 0
-					? { tool_calls: finalResponse!.toolCalls }
-					: {}),
+				content: finalResponse?.content,
+				...(finalResponse?.toolCalls.length > 0 ? { tool_calls: finalResponse?.toolCalls } : {}),
 			};
 			messages.push(assistantMsg);
 
-			if (finalResponse!.toolCalls.length === 0) {
+			if (finalResponse?.toolCalls.length === 0) {
 				if (runHooks?.onAgentEnd) {
-					await runHooks.onAgentEnd({ agent: currentAgent, output: finalResponse!.content ?? "", context: ctx.context });
+					await runHooks.onAgentEnd({
+						agent: currentAgent,
+						output: finalResponse?.content ?? "",
+						context: ctx.context,
+					});
 				}
 				const result = await buildFinalResult(
-					agent, currentAgent, messages, ctx, trace,
-					lastFinishReason, lastResponseId,
+					agent,
+					currentAgent,
+					messages,
+					ctx,
+					trace,
+					lastFinishReason,
+					lastResponseId,
 					inputGuardrailResults,
 				);
 				resolveResult(result);
@@ -731,7 +795,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
 				currentAgent,
 				ctx,
-				finalResponse!.toolCalls,
+				finalResponse?.toolCalls,
 				trace,
 				signal,
 				toolErrorFmt,
@@ -742,7 +806,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			messages.push(...toolMessages);
 
 			// Check toolUseBehavior
-			if (await shouldStopAfterToolCalls(currentAgent, finalResponse!.toolCalls, toolMessages)) {
+			if (await shouldStopAfterToolCalls(currentAgent, finalResponse?.toolCalls, toolMessages)) {
 				const toolOutput = toolMessages.map((m) => m.content).join("\n");
 				resolveResult(
 					new RunResult<TOutput>({
@@ -777,9 +841,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 						if (lastToolMsg && lastToolMsg.role === "tool") {
 							messages[messages.length - 1] = {
 								...lastToolMsg,
-								content:
-									decision.reason ??
-									`Handoff to ${handoffAgent.name} was denied`,
+								content: decision.reason ?? `Handoff to ${handoffAgent.name} was denied`,
 							};
 						}
 					}
@@ -787,10 +849,18 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 				if (allowHandoff) {
 					if (runHooks?.onAgentEnd) {
-						await runHooks.onAgentEnd({ agent: currentAgent, output: finalResponse!.content ?? "", context: ctx.context });
+						await runHooks.onAgentEnd({
+							agent: currentAgent,
+							output: finalResponse?.content ?? "",
+							context: ctx.context,
+						});
 					}
 					if (runHooks?.onHandoff) {
-						await runHooks.onHandoff({ fromAgent: currentAgent, toAgent: handoffAgent, context: ctx.context });
+						await runHooks.onHandoff({
+							fromAgent: currentAgent,
+							toAgent: handoffAgent,
+							context: ctx.context,
+						});
 					}
 
 					// Apply handoff inputFilter if present
@@ -882,7 +952,11 @@ async function buildFinalResult<TContext, TOutput>(
 				trace.endSpan(span);
 			}
 		} else {
-			outputGuardrailResults = await runOutputGuardrails(currentAgent.outputGuardrails, rawOutput, ctx.context);
+			outputGuardrailResults = await runOutputGuardrails(
+				currentAgent.outputGuardrails,
+				rawOutput,
+				ctx.context,
+			);
 		}
 	}
 
@@ -893,10 +967,9 @@ async function buildFinalResult<TContext, TOutput>(
 			const parsed = JSON.parse(rawOutput);
 			finalOutput = entryAgent.outputType.parse(parsed);
 		} catch (error) {
-			throw new OutputParseError(
-				`Failed to parse structured output: ${getErrorMessage(error)}`,
-				{ cause: error },
-			);
+			throw new OutputParseError(`Failed to parse structured output: ${getErrorMessage(error)}`, {
+				cause: error,
+			});
 		}
 	}
 
@@ -1076,11 +1149,9 @@ async function executeToolCallsWithHandoffs<TContext>(
 
 					let result: string;
 					if (trace) {
-						const span = trace.startSpan(
-							`subagent:${matchedSubagent.agent.name}`,
-							"subagent",
-							{ toolName: tcName },
-						);
+						const span = trace.startSpan(`subagent:${matchedSubagent.agent.name}`, "subagent", {
+							toolName: tcName,
+						});
 						try {
 							result = await saTool.execute(ctx.context, params, { signal });
 						} finally {

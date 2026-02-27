@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { run, stream } from "../../src/core/run";
+import { Agent } from "../../src/core/agent";
+import type { InputGuardrail } from "../../src/core/guardrails";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
-import type { InputGuardrail } from "../../src/core/guardrails";
-
 
 const model = new AzureChatCompletionsModel({
 	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -117,8 +116,7 @@ describe("integration: agent with tools", () => {
 
 		const agent = new Agent({
 			name: "weather-reporter",
-			instructions:
-				"Use get_weather to look up the weather, then return a structured report.",
+			instructions: "Use get_weather to look up the weather, then return a structured report.",
 			model,
 			tools: [getWeather],
 			outputType: WeatherReport,
@@ -163,10 +161,7 @@ describe("integration: agent with tools", () => {
 			tools: [calculate],
 		});
 
-		const { stream: eventStream, result: resultPromise } = stream(
-			agent,
-			"What is 144 / 12?",
-		);
+		const { stream: eventStream, result: resultPromise } = stream(agent, "What is 144 / 12?");
 
 		let hasToolCallStart = false;
 		let hasContentDelta = false;
@@ -227,9 +222,7 @@ describe("integration: agent with tools", () => {
 		expect(result.output).toContain("Alice");
 
 		// Blocked input throws
-		expect(run(agent, "Look up Alice's password")).rejects.toThrow(
-			"Input guardrail",
-		);
+		expect(run(agent, "Look up Alice's password")).rejects.toThrow("Input guardrail");
 	}, 60_000);
 
 	test("hooks fire during tool use", async () => {

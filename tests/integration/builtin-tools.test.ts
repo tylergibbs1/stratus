@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { Agent } from "../../src/core/agent";
-import { webSearchTool, codeInterpreterTool } from "../../src/core/builtin-tools";
-import { run, stream } from "../../src/core/run";
-import { tool } from "../../src/core/tool";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { StratusError } from "../../src/core/errors";
 import { z } from "zod";
+import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
+import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { Agent } from "../../src/core/agent";
+import { codeInterpreterTool, webSearchTool } from "../../src/core/builtin-tools";
+import { StratusError } from "../../src/core/errors";
+import { stream, run } from "../../src/core/run";
+import { tool } from "../../src/core/tool";
 
 const model = new AzureResponsesModel({
 	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
@@ -19,13 +19,18 @@ describe("builtin tools: web search", () => {
 		const agent = new Agent({
 			name: "search-agent",
 			model,
-			instructions: "You are a helpful assistant with web search. Answer the user's question concisely.",
+			instructions:
+				"You are a helpful assistant with web search. Answer the user's question concisely.",
 			tools: [webSearchTool()],
 		});
 
-		const result = await run(agent, "What is the current population of Tokyo? Just give the number.", {
-			maxTurns: 3,
-		});
+		const result = await run(
+			agent,
+			"What is the current population of Tokyo? Just give the number.",
+			{
+				maxTurns: 3,
+			},
+		);
 
 		expect(result.output).toBeTruthy();
 		expect(result.output!.length).toBeGreaterThan(5);
@@ -75,7 +80,8 @@ describe("builtin tools: code interpreter", () => {
 		const agent = new Agent({
 			name: "code-agent",
 			model,
-			instructions: "You are a helpful assistant with code execution. Use the code interpreter to compute answers.",
+			instructions:
+				"You are a helpful assistant with code execution. Use the code interpreter to compute answers.",
 			tools: [codeInterpreterTool()],
 		});
 

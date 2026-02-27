@@ -2,14 +2,19 @@ import type { z } from "zod";
 import { Agent, type HandoffInput, type Instructions } from "./agent";
 import type { CostEstimator } from "./cost";
 import { StratusError } from "./errors";
-import type { InputGuardrail, OutputGuardrail, ToolInputGuardrail, ToolOutputGuardrail } from "./guardrails";
+import type {
+	InputGuardrail,
+	OutputGuardrail,
+	ToolInputGuardrail,
+	ToolOutputGuardrail,
+} from "./guardrails";
 import type { AgentHooks, RunHooks } from "./hooks";
+import type { AgentTool } from "./hosted-tool";
 import type { Model, StreamEvent } from "./model";
 import type { RunResult } from "./result";
 import { stream as coreStream } from "./run";
-import type { ToolErrorFormatter, CallModelInputFilter } from "./run";
+import type { CallModelInputFilter, ToolErrorFormatter } from "./run";
 import type { SubAgent } from "./subagent";
-import type { AgentTool } from "./hosted-tool";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 
 export interface SessionConfig<TContext = unknown, TOutput = undefined> {
@@ -154,23 +159,21 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		}
 
 		try {
-			const { stream: s, result: resultPromise } = coreStream(
-				this._agent,
-				[...this._messages],
-				{
-					context: this._context,
-					maxTurns: this._maxTurns,
-					signal,
-					costEstimator: this._costEstimator,
-					maxBudgetUsd: this._maxBudgetUsd,
-					runHooks: this._runHooks,
-					toolErrorFormatter: this._toolErrorFormatter,
-					callModelInputFilter: this._callModelInputFilter,
-					toolInputGuardrails: this._toolInputGuardrails.length > 0 ? this._toolInputGuardrails : undefined,
-					toolOutputGuardrails: this._toolOutputGuardrails.length > 0 ? this._toolOutputGuardrails : undefined,
-					resetToolChoice: this._resetToolChoice,
-				},
-			);
+			const { stream: s, result: resultPromise } = coreStream(this._agent, [...this._messages], {
+				context: this._context,
+				maxTurns: this._maxTurns,
+				signal,
+				costEstimator: this._costEstimator,
+				maxBudgetUsd: this._maxBudgetUsd,
+				runHooks: this._runHooks,
+				toolErrorFormatter: this._toolErrorFormatter,
+				callModelInputFilter: this._callModelInputFilter,
+				toolInputGuardrails:
+					this._toolInputGuardrails.length > 0 ? this._toolInputGuardrails : undefined,
+				toolOutputGuardrails:
+					this._toolOutputGuardrails.length > 0 ? this._toolOutputGuardrails : undefined,
+				resetToolChoice: this._resetToolChoice,
+			});
 
 			this._resultPromise = resultPromise.then((result) => {
 				this._messages = result.messages.filter((m) => m.role !== "system");

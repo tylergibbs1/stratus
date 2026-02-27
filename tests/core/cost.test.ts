@@ -4,7 +4,7 @@ import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import { MaxBudgetExceededError } from "../../src/core/errors";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -120,12 +120,14 @@ describe("cost tracking in run", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 		});
 
 		const estimator = createCostEstimator({
@@ -159,7 +161,11 @@ describe("cost tracking in run", () => {
 describe("budget limits", () => {
 	test("maxBudgetUsd without costEstimator throws at startup", async () => {
 		const model = mockModel([
-			{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+			{
+				content: "Hello!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
 		]);
 
 		const agent = new Agent({ name: "test", model });
@@ -186,12 +192,14 @@ describe("budget limits", () => {
 		const agent = new Agent({
 			name: "test",
 			model,
-			tools: [tool({
-				name: "noop",
-				description: "noop",
-				parameters: z.object({}),
-				execute: async () => "ok",
-			})],
+			tools: [
+				tool({
+					name: "noop",
+					description: "noop",
+					parameters: z.object({}),
+					execute: async () => "ok",
+				}),
+			],
 		});
 
 		const estimator = createCostEstimator({
@@ -202,12 +210,12 @@ describe("budget limits", () => {
 		// Each turn costs: (10000/1000)*0.01 + (5000/1000)*0.03 = 0.25
 		// Budget of 0.20 should be exceeded after first turn
 		try {
-			await run(agent, "Do it", { costEstimator: estimator, maxBudgetUsd: 0.20 });
+			await run(agent, "Do it", { costEstimator: estimator, maxBudgetUsd: 0.2 });
 			expect.unreachable("Should have thrown");
 		} catch (error) {
 			expect(error).toBeInstanceOf(MaxBudgetExceededError);
 			const e = error as MaxBudgetExceededError;
-			expect(e.budgetUsd).toBe(0.20);
+			expect(e.budgetUsd).toBe(0.2);
 			expect(e.spentUsd).toBeCloseTo(0.25, 4);
 		}
 	});

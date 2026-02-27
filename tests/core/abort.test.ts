@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 
@@ -58,9 +58,7 @@ describe("abort signal", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } },
-				],
+				toolCalls: [{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } }],
 			},
 			{ content: "Should not reach", toolCalls: [] },
 		]);
@@ -136,9 +134,7 @@ describe("abort signal", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } },
-				],
+				toolCalls: [{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } }],
 			},
 			{ content: "Should not reach", toolCalls: [] },
 		]);
@@ -173,9 +169,7 @@ describe("abort signal", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } },
-				],
+				toolCalls: [{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } }],
 			},
 			{ content: "Should not reach", toolCalls: [] },
 		]);

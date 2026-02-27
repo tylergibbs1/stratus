@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { StratusError } from "../../src/core/errors";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { StratusError } from "../../src/core/errors";
 
 describe("AzureChatCompletionsModel hosted tool rejection", () => {
 	test("throws StratusError when hosted tool is provided", async () => {
@@ -52,7 +52,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -85,7 +85,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -131,7 +131,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -179,7 +179,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -214,7 +214,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({

@@ -4,7 +4,7 @@ import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-mode
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { handoff } from "../../src/core/handoff";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 

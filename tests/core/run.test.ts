@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { MaxTurnsExceededError } from "../../src/core/errors";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
@@ -38,7 +38,11 @@ function mockModel(responses: ModelResponse[]): Model {
 describe("run", () => {
 	test("simple text response", async () => {
 		const model = mockModel([
-			{ content: "Hello!", toolCalls: [], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } },
+			{
+				content: "Hello!",
+				toolCalls: [],
+				usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+			},
 		]);
 
 		const agent = new Agent({ name: "test", model });
@@ -53,7 +57,11 @@ describe("run", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "get_weather", arguments: '{"city":"NYC"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "get_weather", arguments: '{"city":"NYC"}' },
+					},
 				],
 			},
 			{
@@ -110,9 +118,7 @@ describe("run", () => {
 		const model = mockModel(
 			Array.from({ length: 5 }, () => ({
 				content: null,
-				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } },
-				],
+				toolCalls: [{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } }],
 			})),
 		);
 
@@ -154,9 +160,7 @@ describe("run", () => {
 	});
 
 	test("system prompt from function", async () => {
-		const model = mockModel([
-			{ content: "I'm helpful!", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "I'm helpful!", toolCalls: [] }]);
 
 		const agent = new Agent({
 			name: "test",
@@ -180,9 +184,7 @@ describe("run", () => {
 
 describe("stream", () => {
 	test("streams content deltas", async () => {
-		const model = mockModel([
-			{ content: "Hello world", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Hello world", toolCalls: [] }]);
 
 		const agent = new Agent({ name: "test", model });
 		const events: StreamEvent[] = [];
@@ -199,7 +201,11 @@ describe("stream", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "greet", arguments: '{"name":"World"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "greet", arguments: '{"name":"World"}' },
+					},
 				],
 			},
 			{

@@ -153,9 +153,9 @@ describe("AzureResponsesModel", () => {
 		});
 
 		const model = new AzureResponsesModel(config);
-		expect(
-			model.getResponse({ messages: [{ role: "user", content: "test" }] }),
-		).rejects.toThrow(ContentFilterError);
+		expect(model.getResponse({ messages: [{ role: "user", content: "test" }] })).rejects.toThrow(
+			ContentFilterError,
+		);
 	});
 
 	test("getResponse throws ModelError on HTTP error", async () => {
@@ -167,9 +167,9 @@ describe("AzureResponsesModel", () => {
 		});
 
 		const model = new AzureResponsesModel(config);
-		expect(
-			model.getResponse({ messages: [{ role: "user", content: "test" }] }),
-		).rejects.toThrow(ModelError);
+		expect(model.getResponse({ messages: [{ role: "user", content: "test" }] })).rejects.toThrow(
+			ModelError,
+		);
 	});
 
 	test("incomplete status maps to finishReason length", async () => {
@@ -249,7 +249,13 @@ describe("AzureResponsesModel", () => {
 				}),
 				JSON.stringify({
 					type: "response.output_item.done",
-					item: { id: "item_1", type: "function_call", call_id: "call_abc", name: "greet", arguments: '{"name":"World"}' },
+					item: {
+						id: "item_1",
+						type: "function_call",
+						call_id: "call_abc",
+						name: "greet",
+						arguments: '{"name":"World"}',
+					},
 				}),
 				JSON.stringify({
 					type: "response.completed",

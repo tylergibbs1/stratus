@@ -81,7 +81,11 @@ describe("tracing", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "transfer_to_agent_b", arguments: "{}" } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "transfer_to_agent_b", arguments: "{}" },
+					},
 				],
 			},
 			{ content: "From B", toolCalls: [] },

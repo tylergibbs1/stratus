@@ -69,7 +69,9 @@ const TodoWriteSchema = z.object({
  * });
  * ```
  */
-export function todoTool<TContext = unknown>(list: TodoList): FunctionTool<z.infer<typeof TodoWriteSchema>, TContext> {
+export function todoTool<TContext = unknown>(
+	list: TodoList,
+): FunctionTool<z.infer<typeof TodoWriteSchema>, TContext> {
 	return {
 		type: "function",
 		name: "todo_write",

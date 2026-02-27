@@ -1,16 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
-import {
-	ContentFilterError,
-	MaxTurnsExceededError,
-	OutputParseError,
-	RunAbortedError,
-} from "../../src/core/errors";
+import { Agent } from "../../src/core/agent";
+import { MaxTurnsExceededError, RunAbortedError } from "../../src/core/errors";
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
 import type { ToolCallDecision } from "../../src/core/hooks";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
@@ -95,9 +90,7 @@ describe("edge: maxTurns with real API", () => {
 			modelSettings: { toolChoice: "required" },
 		});
 
-		await expect(run(agent, "Go", { maxTurns: 2 })).rejects.toThrow(
-			MaxTurnsExceededError,
-		);
+		await expect(run(agent, "Go", { maxTurns: 2 })).rejects.toThrow(MaxTurnsExceededError);
 	}, 60_000);
 });
 
@@ -114,9 +107,7 @@ describe("edge: abort with real API", () => {
 		const ac = new AbortController();
 		ac.abort();
 
-		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(
-			RunAbortedError,
-		);
+		await expect(run(agent, "Hi", { signal: ac.signal })).rejects.toThrow(RunAbortedError);
 	}, 10_000);
 
 	test("timeout aborts long-running tool", async () => {
@@ -146,9 +137,7 @@ describe("edge: abort with real API", () => {
 		});
 
 		const start = Date.now();
-		await expect(
-			run(agent, "Do it", { signal: AbortSignal.timeout(3000) }),
-		).rejects.toThrow();
+		await expect(run(agent, "Do it", { signal: AbortSignal.timeout(3000) })).rejects.toThrow();
 		const elapsed = Date.now() - start;
 
 		// Should abort well before the 30s tool timeout
@@ -205,10 +194,7 @@ describe("edge: structured output with real API", () => {
 			outputType: Sentiment,
 		});
 
-		const result = await run(
-			agent,
-			"I absolutely love this product! Best purchase ever!",
-		);
+		const result = await run(agent, "I absolutely love this product! Best purchase ever!");
 
 		expect(result.finalOutput).toBeDefined();
 		expect(result.finalOutput!.sentiment).toBe("positive");
@@ -220,7 +206,7 @@ describe("edge: structured output with real API", () => {
 
 describe("edge: guardrails with real API", () => {
 	test("input guardrail blocks before any API call", async () => {
-		let modelCalled = false;
+		let _modelCalled = false;
 
 		const guard: InputGuardrail = {
 			name: "block_all",
@@ -234,7 +220,7 @@ describe("edge: guardrails with real API", () => {
 			inputGuardrails: [guard],
 			hooks: {
 				beforeRun: () => {
-					modelCalled = true;
+					_modelCalled = true;
 				},
 			},
 		});
@@ -299,14 +285,13 @@ describe("edge: hooks with real API", () => {
 
 		// Denial message should be in the messages
 		const denialMsg = result.messages.find(
-			(m) =>
-				m.role === "tool" && m.content.includes("maintenance"),
+			(m) => m.role === "tool" && m.content.includes("maintenance"),
 		);
 		expect(denialMsg).toBeDefined();
 	}, 60_000);
 
 	test("beforeToolCall modify changes parameters", async () => {
-		const getWeather = tool({
+		const _getWeather = tool({
 			name: "get_weather",
 			description: "Get weather for a city",
 			parameters: z.object({ city: z.string() }),
@@ -436,15 +421,18 @@ describe("edge: session memory with real API", () => {
 
 		// Turn 1: establish facts
 		session.send("My name is Alice and I live in Portland.");
-		for await (const _e of session.stream()) {}
+		for await (const _e of session.stream()) {
+		}
 
 		// Turn 2: add more facts
 		session.send("My favorite food is sushi.");
-		for await (const _e of session.stream()) {}
+		for await (const _e of session.stream()) {
+		}
 
 		// Turn 3: test recall of both facts
 		session.send("What's my name, where do I live, and what's my favorite food?");
-		for await (const _e of session.stream()) {}
+		for await (const _e of session.stream()) {
+		}
 
 		const result = await session.result;
 		const output = result.output.toLowerCase();
@@ -472,8 +460,7 @@ describe("edge: tracing with real API", () => {
 
 		const agent = new Agent({
 			name: "traced_agent",
-			instructions:
-				"Use flaky_api to answer. If it fails, try again. Be concise.",
+			instructions: "Use flaky_api to answer. If it fails, try again. Be concise.",
 			model,
 			tools: [flaky],
 		});
@@ -518,8 +505,6 @@ describe("edge: usage tracking with real API", () => {
 		// Should have usage from at least 2 model calls
 		expect(result.usage.promptTokens).toBeGreaterThan(0);
 		expect(result.usage.completionTokens).toBeGreaterThan(0);
-		expect(result.usage.totalTokens).toBeGreaterThan(
-			result.usage.promptTokens,
-		);
+		expect(result.usage.totalTokens).toBeGreaterThan(result.usage.promptTokens);
 	}, 60_000);
 });

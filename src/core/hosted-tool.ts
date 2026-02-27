@@ -1,5 +1,5 @@
-import type { HostedToolDefinition } from "./types";
 import type { FunctionTool } from "./tool";
+import type { HostedToolDefinition } from "./types";
 
 export interface HostedTool {
 	type: "hosted";

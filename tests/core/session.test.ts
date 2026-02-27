@@ -5,9 +5,7 @@ import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/
 import { createSession, prompt } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 
-function mockModel(
-	responses: ModelResponse[],
-): Model & { requests: ModelRequest[] } {
+function mockModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {
 	let callIndex = 0;
 	const requests: ModelRequest[] = [];
 	return {
@@ -18,9 +16,7 @@ function mockModel(
 			if (!response) throw new Error("No more mock responses");
 			return response;
 		},
-		async *getStreamedResponse(
-			request: ModelRequest,
-		): AsyncGenerator<StreamEvent> {
+		async *getStreamedResponse(request: ModelRequest): AsyncGenerator<StreamEvent> {
 			requests.push(structuredClone(request));
 			const response = responses[callIndex++];
 			if (!response) throw new Error("No more mock responses");
@@ -136,17 +132,13 @@ describe("session", () => {
 
 		// Verify the second request included first turn's messages
 		const secondRequest = model.requests[1]!;
-		const userMessages = secondRequest.messages.filter(
-			(m) => m.role === "user",
-		);
+		const userMessages = secondRequest.messages.filter((m) => m.role === "user");
 		expect(userMessages).toHaveLength(2);
 		expect(userMessages[0]!.content).toBe("Weather in NYC?");
 		expect(userMessages[1]!.content).toBe("What about London?");
 
 		// Assistant message from turn 1 should be in turn 2's context
-		const assistantMessages = secondRequest.messages.filter(
-			(m) => m.role === "assistant",
-		);
+		const assistantMessages = secondRequest.messages.filter((m) => m.role === "assistant");
 		expect(assistantMessages).toHaveLength(1);
 		expect(assistantMessages[0]!.content).toBe("NYC weather is sunny.");
 	});

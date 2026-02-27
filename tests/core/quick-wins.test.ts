@@ -3,14 +3,12 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { RunContext } from "../../src/core/context";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { createSession, prompt } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import type { ContentPart } from "../../src/core/types";
 
-function mockModel(
-	responses: ModelResponse[],
-): Model & { requests: ModelRequest[] } {
+function mockModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {
 	let callIndex = 0;
 	const requests: ModelRequest[] = [];
 	return {
@@ -81,7 +79,11 @@ describe("finishReason", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "greet", arguments: '{"name":"world"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "greet", arguments: '{"name":"world"}' },
+					},
 				],
 				finishReason: "tool_calls",
 			},
@@ -110,7 +112,11 @@ describe("finishReason", () => {
 			{
 				content: null,
 				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "greet", arguments: '{"name":"world"}' } },
+					{
+						id: "tc1",
+						type: "function",
+						function: { name: "greet", arguments: '{"name":"world"}' },
+					},
 				],
 				finishReason: "tool_calls",
 			},
@@ -135,9 +141,7 @@ describe("finishReason", () => {
 	});
 
 	test("undefined when model does not provide finishReason", async () => {
-		const model = mockModel([
-			{ content: "Hi", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Hi", toolCalls: [] }]);
 
 		const agent = new Agent({ name: "test", model });
 		const result = await run(agent, "Hi");
@@ -151,9 +155,7 @@ describe("cache tokens", () => {
 		const model = mockModel([
 			{
 				content: null,
-				toolCalls: [
-					{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } },
-				],
+				toolCalls: [{ id: "tc1", type: "function", function: { name: "noop", arguments: "{}" } }],
 				usage: {
 					promptTokens: 100,
 					completionTokens: 10,
@@ -248,9 +250,7 @@ describe("multimodal UserMessage", () => {
 	});
 
 	test("session.send() with ContentPart[]", async () => {
-		const model = mockModel([
-			{ content: "I see it", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "I see it", toolCalls: [] }]);
 
 		const session = createSession({ model });
 		const parts: ContentPart[] = [
@@ -268,9 +268,7 @@ describe("multimodal UserMessage", () => {
 	});
 
 	test("prompt() with ContentPart[]", async () => {
-		const model = mockModel([
-			{ content: "Described", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Described", toolCalls: [] }]);
 
 		const parts: ContentPart[] = [
 			{ type: "text", text: "Describe" },
@@ -283,9 +281,7 @@ describe("multimodal UserMessage", () => {
 
 	test("extractUserText extracts text-only from multimodal messages", async () => {
 		const hookInput: string[] = [];
-		const model = mockModel([
-			{ content: "Ok", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Ok", toolCalls: [] }]);
 
 		const agent = new Agent({
 			name: "test",

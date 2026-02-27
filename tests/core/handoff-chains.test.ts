@@ -8,7 +8,7 @@ import {
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
 import { handoff } from "../../src/core/handoff";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { run, stream } from "../../src/core/run";
+import { stream, run } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 
@@ -53,9 +53,7 @@ function mockModel(responses: ModelResponse[]): Model {
 	};
 }
 
-function capturingModel(
-	responses: ModelResponse[],
-): Model & { requests: ModelRequest[] } {
+function capturingModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {
 	let callIndex = 0;
 	const requests: ModelRequest[] = [];
 	return {
@@ -93,8 +91,18 @@ describe("handoff chains (A→B→C)", () => {
 		]);
 
 		const agentC = new Agent({ name: "agent_c", model, instructions: "You are C" });
-		const agentB = new Agent({ name: "agent_b", model, instructions: "You are B", handoffs: [agentC] });
-		const agentA = new Agent({ name: "agent_a", model, instructions: "You are A", handoffs: [agentB] });
+		const agentB = new Agent({
+			name: "agent_b",
+			model,
+			instructions: "You are B",
+			handoffs: [agentC],
+		});
+		const agentA = new Agent({
+			name: "agent_a",
+			model,
+			instructions: "You are A",
+			handoffs: [agentB],
+		});
 
 		const result = await run(agentA, "Start chain");
 
@@ -110,8 +118,18 @@ describe("handoff chains (A→B→C)", () => {
 		]);
 
 		const agentC = new Agent({ name: "agent_c", model, instructions: "Prompt C" });
-		const agentB = new Agent({ name: "agent_b", model, instructions: "Prompt B", handoffs: [agentC] });
-		const agentA = new Agent({ name: "agent_a", model, instructions: "Prompt A", handoffs: [agentB] });
+		const agentB = new Agent({
+			name: "agent_b",
+			model,
+			instructions: "Prompt B",
+			handoffs: [agentC],
+		});
+		const agentA = new Agent({
+			name: "agent_a",
+			model,
+			instructions: "Prompt A",
+			handoffs: [agentB],
+		});
 
 		await run(agentA, "Transfer");
 
@@ -167,7 +185,9 @@ describe("handoff chains (A→B→C)", () => {
 			handoffs: [
 				handoff({
 					agent: agentC,
-					onHandoff: () => { callOrder.push("B→C"); },
+					onHandoff: () => {
+						callOrder.push("B→C");
+					},
 				}),
 			],
 		});
@@ -177,7 +197,9 @@ describe("handoff chains (A→B→C)", () => {
 			handoffs: [
 				handoff({
 					agent: agentB,
-					onHandoff: () => { callOrder.push("A→B"); },
+					onHandoff: () => {
+						callOrder.push("A→B");
+					},
 				}),
 			],
 		});
@@ -208,9 +230,18 @@ describe("handoff chains (A→B→C)", () => {
 
 	test("usage accumulates across all hops in chain", async () => {
 		const model = mockModel([
-			{ ...handoffResponse("agent_b"), usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 } },
-			{ ...handoffResponse("agent_c"), usage: { promptTokens: 150, completionTokens: 15, totalTokens: 165 } },
-			{ ...textResponse("Done"), usage: { promptTokens: 200, completionTokens: 20, totalTokens: 220 } },
+			{
+				...handoffResponse("agent_b"),
+				usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
+			},
+			{
+				...handoffResponse("agent_c"),
+				usage: { promptTokens: 150, completionTokens: 15, totalTokens: 165 },
+			},
+			{
+				...textResponse("Done"),
+				usage: { promptTokens: 200, completionTokens: 20, totalTokens: 220 },
+			},
 		]);
 
 		const agentC = new Agent({ name: "agent_c", model });
@@ -228,9 +259,7 @@ describe("handoff chains (A→B→C)", () => {
 
 describe("guardrail + handoff interactions", () => {
 	test("input guardrail on entry agent blocks before any handoff", async () => {
-		const modelGetResponse = mock(() =>
-			Promise.resolve(textResponse("Should not reach")),
-		);
+		const modelGetResponse = mock(() => Promise.resolve(textResponse("Should not reach")));
 		const model: Model = {
 			getResponse: modelGetResponse,
 			async *getStreamedResponse(): AsyncGenerator<StreamEvent> {
@@ -256,10 +285,7 @@ describe("guardrail + handoff interactions", () => {
 	});
 
 	test("output guardrail on target agent fires after handoff", async () => {
-		const model = mockModel([
-			handoffResponse("agent_b"),
-			textResponse("sensitive output from B"),
-		]);
+		const model = mockModel([handoffResponse("agent_b"), textResponse("sensitive output from B")]);
 
 		const outputGuardrail: OutputGuardrail = {
 			name: "b_output_check",
@@ -285,10 +311,7 @@ describe("guardrail + handoff interactions", () => {
 	});
 
 	test("different guardrails on different agents in chain", async () => {
-		const model = mockModel([
-			handoffResponse("agent_b"),
-			textResponse("clean output from B"),
-		]);
+		const model = mockModel([handoffResponse("agent_b"), textResponse("clean output from B")]);
 
 		// Agent A has a passing input guardrail
 		const inputGuardrailA: InputGuardrail = {
@@ -321,10 +344,7 @@ describe("guardrail + handoff interactions", () => {
 	});
 
 	test("beforeHandoff hook deny prevents agent switch", async () => {
-		const model = mockModel([
-			handoffResponse("agent_b"),
-			textResponse("Stayed with A"),
-		]);
+		const model = mockModel([handoffResponse("agent_b"), textResponse("Stayed with A")]);
 
 		const agentB = new Agent({ name: "agent_b", model });
 		const agentA = new Agent({

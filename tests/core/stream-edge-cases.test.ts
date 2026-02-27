@@ -2,12 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError, StratusError } from "../../src/core/errors";
-import type {
-	Model,
-	ModelRequest,
-	ModelResponse,
-	StreamEvent,
-} from "../../src/core/model";
+import type { Model, ModelResponse, StreamEvent } from "../../src/core/model";
 import { stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
@@ -15,9 +10,7 @@ function textResponse(content: string): ModelResponse {
 	return { content, toolCalls: [] };
 }
 
-function toolCallResponse(
-	calls: { id: string; name: string; args: string }[],
-): ModelResponse {
+function toolCallResponse(calls: { id: string; name: string; args: string }[]): ModelResponse {
 	return {
 		content: null,
 		toolCalls: calls.map((c) => ({
@@ -111,7 +104,8 @@ describe("stream edge cases", () => {
 
 		let threw = false;
 		try {
-			for await (const _e of s) {}
+			for await (const _e of s) {
+			}
 		} catch {
 			threw = true;
 		}
@@ -183,7 +177,8 @@ describe("stream edge cases", () => {
 
 		let streamError: Error | undefined;
 		try {
-			for await (const _e of s) {}
+			for await (const _e of s) {
+			}
 		} catch (e) {
 			streamError = e as Error;
 		}
@@ -209,7 +204,8 @@ describe("stream edge cases", () => {
 
 		let threw = false;
 		try {
-			for await (const _e of s) {}
+			for await (const _e of s) {
+			}
 		} catch (e) {
 			if (e instanceof StratusError) threw = true;
 		}
@@ -235,7 +231,8 @@ describe("stream edge cases", () => {
 		const agent = new Agent({ name: "test", model, tools: [t] });
 		const { stream: s, result } = stream(agent, "Go");
 
-		for await (const _e of s) {}
+		for await (const _e of s) {
+		}
 
 		const r = await result;
 		expect(r.numTurns).toBe(3);
@@ -268,7 +265,8 @@ describe("stream edge cases", () => {
 		const agent = new Agent({ name: "test", model, tools: [t] });
 		const { stream: s, result } = stream(agent, "Go");
 
-		for await (const _e of s) {}
+		for await (const _e of s) {
+		}
 
 		const r = await result;
 		expect(r.usage.promptTokens).toBe(300);

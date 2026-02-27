@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Agent } from "../../src/core/agent";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { Agent } from "../../src/core/agent";
 import { ToolTimeoutError } from "../../src/core/errors";
-import type { RunHooks } from "../../src/core/hooks";
-import type { ToolInputGuardrail, ToolOutputGuardrail } from "../../src/core/guardrails";
-import { run, stream } from "../../src/core/run";
-import { tool } from "../../src/core/tool";
+import type { ToolInputGuardrail } from "../../src/core/guardrails";
 import { handoff } from "../../src/core/handoff";
+import type { RunHooks } from "../../src/core/hooks";
+import { stream, run } from "../../src/core/run";
+import { tool } from "../../src/core/tool";
 
 const chatModel = new AzureChatCompletionsModel({
 	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -107,7 +107,9 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 
 		const result = await run(agent, "What is 2+2? Just answer directly.", {
 			callModelInputFilter: ({ request }) => {
-				capturedToolNames = (request.tools ?? []).map((t: any) => t.function?.name ?? t.name ?? "unknown");
+				capturedToolNames = (request.tools ?? []).map(
+					(t: any) => t.function?.name ?? t.name ?? "unknown",
+				);
 				return request;
 			},
 		});
@@ -120,10 +122,18 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 	test("RunHooks fire correctly", { timeout: 60000 }, async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
-			onAgentStart: async ({ agent }) => { events.push(`agent_start:${agent.name}`); },
-			onAgentEnd: async ({ agent }) => { events.push(`agent_end:${agent.name}`); },
-			onLlmStart: async ({ agent }) => { events.push(`llm_start:${agent.name}`); },
-			onLlmEnd: async ({ agent }) => { events.push(`llm_end:${agent.name}`); },
+			onAgentStart: async ({ agent }) => {
+				events.push(`agent_start:${agent.name}`);
+			},
+			onAgentEnd: async ({ agent }) => {
+				events.push(`agent_end:${agent.name}`);
+			},
+			onLlmStart: async ({ agent }) => {
+				events.push(`llm_start:${agent.name}`);
+			},
+			onLlmEnd: async ({ agent }) => {
+				events.push(`llm_end:${agent.name}`);
+			},
 		};
 
 		const agent = new Agent({
@@ -143,10 +153,18 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 	test("RunHooks with tool calls", { timeout: 60000 }, async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
-			onToolStart: async ({ toolName }) => { events.push(`tool_start:${toolName}`); },
-			onToolEnd: async ({ toolName }) => { events.push(`tool_end:${toolName}`); },
-			onLlmStart: async () => { events.push("llm_start"); },
-			onLlmEnd: async () => { events.push("llm_end"); },
+			onToolStart: async ({ toolName }) => {
+				events.push(`tool_start:${toolName}`);
+			},
+			onToolEnd: async ({ toolName }) => {
+				events.push(`tool_end:${toolName}`);
+			},
+			onLlmStart: async () => {
+				events.push("llm_start");
+			},
+			onLlmEnd: async () => {
+				events.push("llm_end");
+			},
 		};
 
 		const agent = new Agent({
@@ -171,8 +189,12 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 			model: chatModel,
 			instructions: "Say hello.",
 			hooks: {
-				onLlmStart: async () => { events.push("llm_start"); },
-				onLlmEnd: async ({ response }) => { events.push(`llm_end:${response.toolCallCount}`); },
+				onLlmStart: async () => {
+					events.push("llm_start");
+				},
+				onLlmEnd: async ({ response }) => {
+					events.push(`llm_end:${response.toolCallCount}`);
+				},
 			},
 		});
 
@@ -219,7 +241,8 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		const agent = new Agent({
 			name: "max-turns",
 			model: chatModel,
-			instructions: "You MUST call the loop_tool tool every single time. Never respond with text, always call the tool.",
+			instructions:
+				"You MUST call the loop_tool tool every single time. Never respond with text, always call the tool.",
 			tools: [loopingTool],
 			modelSettings: {
 				toolChoice: "required",
@@ -276,10 +299,18 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 	test("streaming with RunHooks", { timeout: 60000 }, async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
-			onAgentStart: async () => { events.push("agent_start"); },
-			onAgentEnd: async () => { events.push("agent_end"); },
-			onLlmStart: async () => { events.push("llm_start"); },
-			onLlmEnd: async () => { events.push("llm_end"); },
+			onAgentStart: async () => {
+				events.push("agent_start");
+			},
+			onAgentEnd: async () => {
+				events.push("agent_end");
+			},
+			onLlmStart: async () => {
+				events.push("llm_start");
+			},
+			onLlmEnd: async () => {
+				events.push("llm_end");
+			},
 		};
 
 		const agent = new Agent({
@@ -322,10 +353,18 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 	test("RunHooks fire with Responses API", { timeout: 60000 }, async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
-			onAgentStart: async ({ agent }) => { events.push(`start:${agent.name}`); },
-			onAgentEnd: async ({ agent }) => { events.push(`end:${agent.name}`); },
-			onLlmStart: async () => { events.push("llm_start"); },
-			onLlmEnd: async () => { events.push("llm_end"); },
+			onAgentStart: async ({ agent }) => {
+				events.push(`start:${agent.name}`);
+			},
+			onAgentEnd: async ({ agent }) => {
+				events.push(`end:${agent.name}`);
+			},
+			onLlmStart: async () => {
+				events.push("llm_start");
+			},
+			onLlmEnd: async () => {
+				events.push("llm_end");
+			},
 		};
 
 		const agent = new Agent({
@@ -360,7 +399,8 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		const agent = new Agent({
 			name: "guardrail-test",
 			model: responsesModel,
-			instructions: "You MUST use the get_weather tool for Tokyo when asked about weather. Always call the tool.",
+			instructions:
+				"You MUST use the get_weather tool for Tokyo when asked about weather. Always call the tool.",
 			tools: [getWeather],
 		});
 
@@ -380,20 +420,24 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		const specialistAgent = new Agent({
 			name: "specialist",
 			model: responsesModel,
-			instructions: "You are a math specialist. Answer the user's question briefly with just the number.",
+			instructions:
+				"You are a math specialist. Answer the user's question briefly with just the number.",
 		});
 
 		const mainAgent = new Agent({
 			name: "router",
 			model: responsesModel,
-			instructions: "You are a router. You MUST immediately transfer to the specialist agent using the transfer_to_specialist tool. Do not answer yourself.",
+			instructions:
+				"You are a router. You MUST immediately transfer to the specialist agent using the transfer_to_specialist tool. Do not answer yourself.",
 			handoffs: [
 				handoff({
 					agent: specialistAgent,
 					inputFilter: ({ history }) => {
 						filterCalled = true;
 						const filtered = history.filter((m) => m.role === "user" || m.role === "system");
-						filteredOutRoles = history.filter((m) => m.role !== "user" && m.role !== "system").map((m) => m.role);
+						filteredOutRoles = history
+							.filter((m) => m.role !== "user" && m.role !== "system")
+							.map((m) => m.role);
 						return filtered;
 					},
 				}),
@@ -419,8 +463,12 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 
 		const { stream: s, result } = stream(agent, "Hi", {
 			runHooks: {
-				onLlmStart: async () => { events.push("llm_start"); },
-				onLlmEnd: async () => { events.push("llm_end"); },
+				onLlmStart: async () => {
+					events.push("llm_start");
+				},
+				onLlmEnd: async () => {
+					events.push("llm_end");
+				},
 			},
 		});
 

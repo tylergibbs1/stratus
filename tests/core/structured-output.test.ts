@@ -28,9 +28,7 @@ const personSchema = z.object({ name: z.string(), age: z.number() });
 
 describe("structured output", () => {
 	test("parses valid JSON into finalOutput", async () => {
-		const model = mockModel([
-			{ content: '{"name":"Alice","age":30}', toolCalls: [] },
-		]);
+		const model = mockModel([{ content: '{"name":"Alice","age":30}', toolCalls: [] }]);
 
 		const agent = new Agent({
 			name: "test",
@@ -45,9 +43,7 @@ describe("structured output", () => {
 	});
 
 	test("throws OutputParseError on invalid JSON", async () => {
-		const model = mockModel([
-			{ content: "not valid json", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "not valid json", toolCalls: [] }]);
 
 		const agent = new Agent({
 			name: "test",
@@ -59,9 +55,7 @@ describe("structured output", () => {
 	});
 
 	test("throws OutputParseError on schema validation failure", async () => {
-		const model = mockModel([
-			{ content: '{"name":"Alice","age":"not a number"}', toolCalls: [] },
-		]);
+		const model = mockModel([{ content: '{"name":"Alice","age":"not a number"}', toolCalls: [] }]);
 
 		const agent = new Agent({
 			name: "test",
@@ -73,9 +67,7 @@ describe("structured output", () => {
 	});
 
 	test("backward compat: no outputType means finalOutput is undefined", async () => {
-		const model = mockModel([
-			{ content: "Hello!", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "Hello!", toolCalls: [] }]);
 
 		const agent = new Agent({ name: "test", model });
 		const result = await run(agent, "Hi");
