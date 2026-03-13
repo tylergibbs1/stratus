@@ -1623,4 +1623,179 @@ describe("WorkerExecutor", () => {
 		const result = JSON.parse(resultStr);
 		expect(result.result).toEqual({ temp: 72, city: "NYC" });
 	});
+
+	test("handles non-Error rejection (raw string throw)", async () => {
+		const executor = new WorkerExecutor();
+		const fns = {
+			bad: async () => {
+				throw "raw string rejection";
+			},
+		};
+		const result = await executor.execute(
+			"async () => { return await codemode.bad(); }",
+			fns,
+		);
+		expect(result.error).toBe("raw string rejection");
+	});
+
+	test("handles large return values across worker boundary", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute(
+			"async () => { return Array.from({ length: 10000 }, (_, i) => i); }",
+			{},
+		);
+		expect(result.error).toBeUndefined();
+		expect((result.result as number[]).length).toBe(10000);
+	});
+
+	test("handles undefined return", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute("async () => { /* no return */ }", {});
+		expect(result.error).toBeUndefined();
+		// undefined doesn't survive structured clone, becomes null or undefined
+		expect(result.result == null).toBe(true);
+	});
+
+	test("handles null return", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute("async () => { return null; }", {});
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBeNull();
+	});
+
+	test("handles syntax error in code", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute("async () => { if ( }", {});
+		expect(result.error).toBeDefined();
+	});
+
+	test("times out on infinite loop", async () => {
+		const executor = new WorkerExecutor({ timeout: 300 });
+		const result = await executor.execute(
+			"async () => { while (true) {} }",
+			{},
+		);
+		expect(result.error).toBe("Execution timed out");
+	});
+
+	test("multiple sequential executions each get a fresh worker", async () => {
+		const executor = new WorkerExecutor();
+		const results: number[] = [];
+		for (let i = 0; i < 5; i++) {
+			const result = await executor.execute(`async () => { return ${i}; }`, {});
+			results.push(result.result as number);
+		}
+		expect(results).toEqual([0, 1, 2, 3, 4]);
+	});
+
+	test("handles tool that returns slowly (worker waits on host)", async () => {
+		const executor = new WorkerExecutor({ timeout: 10_000 });
+		const fns = {
+			slow: async () => {
+				await new Promise((r) => setTimeout(r, 200));
+				return "slow result";
+			},
+		};
+		const result = await executor.execute(
+			"async () => { return await codemode.slow(); }",
+			fns,
+		);
+		expect(result.result).toBe("slow result");
+	});
+
+	test("code without tool calls works with empty fns map", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute(
+			"async () => { const x = [1,2,3]; return x.map(n => n * 2); }",
+			{},
+		);
+		expect(result.result).toEqual([2, 4, 6]);
+	});
+
+	test("returning nested objects survives structured clone", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute(
+			`async () => {
+				return {
+					users: [
+						{ name: "Alice", scores: [10, 20] },
+						{ name: "Bob", scores: [30, 40] },
+					],
+					meta: { total: 2, nested: { deep: true } },
+				};
+			}`,
+			{},
+		);
+		expect(result.error).toBeUndefined();
+		const r = result.result as any;
+		expect(r.users).toHaveLength(2);
+		expect(r.users[0].scores).toEqual([10, 20]);
+		expect(r.meta.nested.deep).toBe(true);
+	});
+
+	test("tool call that returns undefined", async () => {
+		const executor = new WorkerExecutor();
+		const fns = {
+			noop: async () => undefined,
+		};
+		const result = await executor.execute(
+			"async () => { const r = await codemode.noop(); return { got: r }; }",
+			fns,
+		);
+		expect(result.error).toBeUndefined();
+		// undefined doesn't survive structured clone in postMessage
+		expect((result.result as any).got == null).toBe(true);
+	});
+
+	test("concurrent executions on same WorkerExecutor instance", async () => {
+		const executor = new WorkerExecutor();
+		const promises = Array.from({ length: 5 }, (_, i) =>
+			executor.execute(`async () => { return ${i} * 10; }`, {}),
+		);
+		const results = await Promise.all(promises);
+		expect(results.map((r) => r.result)).toEqual([0, 10, 20, 30, 40]);
+		expect(results.every((r) => !r.error)).toBe(true);
+	});
+
+	test("error in tool preserves logs captured before the error", async () => {
+		const executor = new WorkerExecutor();
+		const fns = {
+			explode: async () => {
+				throw new Error("kaboom");
+			},
+		};
+		const result = await executor.execute(
+			`async () => {
+				console.log("step 1");
+				console.log("step 2");
+				await codemode.explode();
+				console.log("step 3");
+			}`,
+			fns,
+		);
+		expect(result.error).toBe("kaboom");
+		expect(result.logs).toContain("step 1");
+		expect(result.logs).toContain("step 2");
+		expect(result.logs).not.toContain("step 3");
+	});
+
+	test("code that accesses globalThis still works in worker", async () => {
+		const executor = new WorkerExecutor();
+		const result = await executor.execute(
+			"async () => { return typeof globalThis === 'object'; }",
+			{},
+		);
+		expect(result.error).toBeUndefined();
+		expect(result.result).toBe(true);
+	});
+
+	test("handles boolean and string return types", async () => {
+		const executor = new WorkerExecutor();
+		const r1 = await executor.execute("async () => { return true; }", {});
+		expect(r1.result).toBe(true);
+		const r2 = await executor.execute("async () => { return 'hello'; }", {});
+		expect(r2.result).toBe("hello");
+		const r3 = await executor.execute("async () => { return 0; }", {});
+		expect(r3.result).toBe(0);
+	});
 });
