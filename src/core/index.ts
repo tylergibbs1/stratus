@@ -127,3 +127,18 @@ export {
 } from "./errors";
 
 export { zodToJsonSchema } from "./utils/zod";
+
+export {
+	createCodeModeTool,
+	FunctionExecutor,
+	generateTypes,
+	normalizeCode,
+	sanitizeToolName,
+} from "./codemode/index";
+export type {
+	CodeModeToolOptions,
+	CodeModeOutput,
+	Executor,
+	ExecuteResult,
+	FunctionExecutorOptions,
+} from "./codemode/index";
