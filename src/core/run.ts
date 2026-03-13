@@ -717,14 +717,14 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				}
 			}
 
-			if (!gotDone) {
+			if (!gotDone || !finalResponse) {
 				throw new StratusError("Stream ended without a done event");
 			}
 
 			// Fire onLlmEnd hooks
 			const llmEndInfo = {
-				content: finalResponse?.content,
-				toolCallCount: finalResponse?.toolCalls.length,
+				content: finalResponse.content,
+				toolCallCount: finalResponse.toolCalls.length,
 			};
 			if (currentAgent.hooks.onLlmEnd) {
 				await currentAgent.hooks.onLlmEnd({
@@ -742,12 +742,12 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			}
 
 			checkAborted(signal);
-			lastFinishReason = finalResponse?.finishReason;
-			if (finalResponse?.responseId) lastResponseId = finalResponse?.responseId;
-			ctx.addUsage(finalResponse?.usage);
+			lastFinishReason = finalResponse.finishReason;
+			if (finalResponse.responseId) lastResponseId = finalResponse.responseId;
+			ctx.addUsage(finalResponse.usage);
 			ctx.numTurns++;
 
-			applyTurnCost(ctx, finalResponse?.usage, costEstimator);
+			applyTurnCost(ctx, finalResponse.usage, costEstimator);
 
 			// Check budget after each model call
 			try {
@@ -765,16 +765,16 @@ async function* streamInternal<TContext, TOutput = undefined>(
 
 			const assistantMsg: AssistantMessage = {
 				role: "assistant",
-				content: finalResponse?.content,
-				...(finalResponse?.toolCalls.length > 0 ? { tool_calls: finalResponse?.toolCalls } : {}),
+				content: finalResponse.content ?? null,
+				...(finalResponse.toolCalls.length > 0 ? { tool_calls: finalResponse.toolCalls } : {}),
 			};
 			messages.push(assistantMsg);
 
-			if (finalResponse?.toolCalls.length === 0) {
+			if (finalResponse.toolCalls.length === 0) {
 				if (runHooks?.onAgentEnd) {
 					await runHooks.onAgentEnd({
 						agent: currentAgent,
-						output: finalResponse?.content ?? "",
+						output: finalResponse.content ?? "",
 						context: ctx.context,
 					});
 				}
@@ -795,7 +795,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
 				currentAgent,
 				ctx,
-				finalResponse?.toolCalls,
+				finalResponse.toolCalls,
 				trace,
 				signal,
 				toolErrorFmt,
@@ -806,7 +806,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			messages.push(...toolMessages);
 
 			// Check toolUseBehavior
-			if (await shouldStopAfterToolCalls(currentAgent, finalResponse?.toolCalls, toolMessages)) {
+			if (await shouldStopAfterToolCalls(currentAgent, finalResponse.toolCalls, toolMessages)) {
 				const toolOutput = toolMessages.map((m) => m.content).join("\n");
 				resolveResult(
 					new RunResult<TOutput>({
