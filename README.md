@@ -437,7 +437,13 @@ const agent = new Agent({
 // }
 ```
 
-`createCodeModeTool` generates TypeScript types from your tools, presents the LLM with a single `execute_code` tool, and runs the generated code in an executor. All tool calls happen within one invocation — no round-trips through the model between calls. Implement the `Executor` interface for custom sandboxes (isolated-vm, containers, Cloudflare Workers).
+`createCodeModeTool` generates TypeScript types from your tools, presents the LLM with a single `execute_code` tool, and runs the generated code in an executor. All tool calls happen within one invocation — no round-trips through the model between calls.
+
+Two built-in executors:
+- **`FunctionExecutor`** — fast, same-process (NOT sandboxed)
+- **`WorkerExecutor`** — isolated via `worker_threads` (separate V8 context, no host access)
+
+Implement the `Executor` interface for custom sandboxes (containers, Cloudflare Workers, etc.).
 
 ## Imports
 
