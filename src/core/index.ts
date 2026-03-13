@@ -131,6 +131,7 @@ export { zodToJsonSchema } from "./utils/zod";
 export {
 	createCodeModeTool,
 	FunctionExecutor,
+	WorkerExecutor,
 	generateTypes,
 	normalizeCode,
 	sanitizeToolName,
@@ -141,4 +142,5 @@ export type {
 	Executor,
 	ExecuteResult,
 	FunctionExecutorOptions,
+	WorkerExecutorOptions,
 } from "./codemode/index";

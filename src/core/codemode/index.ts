@@ -15,8 +15,8 @@ import type { Executor } from "./executor";
 import { generateTypes, normalizeCode, sanitizeToolName } from "./types";
 
 export type { Executor, ExecuteResult } from "./executor";
-export { FunctionExecutor } from "./executor";
-export type { FunctionExecutorOptions } from "./executor";
+export { FunctionExecutor, WorkerExecutor } from "./executor";
+export type { FunctionExecutorOptions, WorkerExecutorOptions } from "./executor";
 export { generateTypes, normalizeCode, sanitizeToolName } from "./types";
 
 // ── Default description ────────────────────────────────────────────
