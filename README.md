@@ -22,7 +22,7 @@ A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with t
 - **Type-safe from schema to output** — Zod schemas drive tool parameters, structured output, and validation. Context types flow through agents, hooks, and guardrails at compile time.
 - **Zero dependencies** — only Zod as a peer dep. No transitive dependency sprawl, no framework lock-in.
 
-`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `todo tracking` `cost tracking`
+`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking`
 
 ## Install
 
@@ -407,6 +407,37 @@ const agent = new Agent({
   toolUseBehavior: "stop_on_first_tool",
 });
 ```
+
+### Code Mode (Experimental)
+
+Let LLMs write code that orchestrates multiple tools instead of calling them one at a time. Inspired by [Cloudflare's Code Mode](https://blog.cloudflare.com/code-mode-the-better-way-to-use-mcp) — LLMs are better at writing code than making individual tool calls.
+
+```ts
+import { createCodeModeTool, FunctionExecutor } from "stratus-sdk/core";
+
+const executor = new FunctionExecutor({ timeout: 30_000 });
+const codemode = createCodeModeTool({
+  tools: [getWeather, sendEmail, lookupOrder],
+  executor,
+});
+
+const agent = new Agent({
+  name: "assistant",
+  model,
+  tools: [codemode],
+});
+
+// The LLM writes code like:
+// async () => {
+//   const weather = await codemode.get_weather({ location: "London" });
+//   if (weather.temp > 60) {
+//     await codemode.send_email({ to: "team@co.com", subject: "Nice day!", body: ... });
+//   }
+//   return { weather, notified: true };
+// }
+```
+
+`createCodeModeTool` generates TypeScript types from your tools, presents the LLM with a single `execute_code` tool, and runs the generated code in an executor. All tool calls happen within one invocation — no round-trips through the model between calls. Implement the `Executor` interface for custom sandboxes (isolated-vm, containers, Cloudflare Workers).
 
 ## Imports
 
