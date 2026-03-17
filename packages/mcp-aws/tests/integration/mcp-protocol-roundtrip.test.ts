@@ -1,6 +1,6 @@
 /**
- * Full round-trip: McpServer → stdio → Client → tool call → response.
- * Tests the real MCP protocol over stdio pipes.
+ * Full round-trip: McpServer SDK → InMemoryTransport → Client → tool call → response.
+ * Tests the real MCP JSON-RPC protocol via in-memory transport.
  */
 import { describe, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

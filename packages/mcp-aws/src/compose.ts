@@ -59,6 +59,11 @@ export async function codeMcpServer(options: CodeMcpServerOptions): Promise<SdkM
 
 	for (const tool of tools) {
 		const safeName = sanitizeToolName(tool.name);
+		if (toolMap.has(safeName)) {
+			throw new Error(
+				`Tool name collision: "${tool.name}" sanitizes to "${safeName}" which is already used. Rename one of the conflicting tools.`,
+			);
+		}
 		typeLines.push(`\t/** ${tool.description ?? tool.name} */`);
 		typeLines.push(`\t${safeName}: (input: unknown) => Promise<unknown>;`);
 
@@ -121,8 +126,8 @@ export async function codeMcpServer(options: CodeMcpServerOptions): Promise<SdkM
 }
 
 export type CreateMcpHandlerOptions = {
-	/** The MCP server instance */
-	server: SdkMcpServer;
+	/** Factory that creates a fresh MCP server per request (stateless isolation). */
+	createServer: () => SdkMcpServer;
 };
 
 /**
@@ -165,9 +170,11 @@ export function createMcpHandler(
 			enableJsonResponse: true,
 		});
 
-		await options.server.connect(transport);
+		const server = options.createServer();
+		await server.connect(transport);
 		const response = await transport.handleRequest(req);
 		await transport.close();
+		await server.close();
 
 		return response;
 	};

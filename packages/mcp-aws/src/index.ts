@@ -75,7 +75,7 @@ export { isBlockedUrl, assertSafeUrl } from "./ssrf.js";
 export type { McpEventMap, McpEventName } from "./events.js";
 
 // ── Composition ─────────────────────────────────────────────────────
-export { codeMcpServer, createMcpHandler, type CodeMcpServerOptions } from "./compose.js";
+export { codeMcpServer, createMcpHandler, type CodeMcpServerOptions, type CreateMcpHandlerOptions } from "./compose.js";
 
 // ── Deploy ──────────────────────────────────────────────────────────
 export {

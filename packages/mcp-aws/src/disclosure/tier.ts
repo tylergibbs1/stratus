@@ -52,8 +52,8 @@ function gateMatchesPrerequisite(tool: ToolConfig, gateName: string): boolean {
 
 	// Both should be synchronous GateResult for requires() gates
 	if (withoutResult instanceof Promise || withResult instanceof Promise) {
-		// Async gates can't be checked synchronously — conservatively promote
-		return true;
+		// Async gates can't be checked synchronously — default to deny (don't promote)
+		return false;
 	}
 
 	return !withoutResult.allowed && withResult.allowed;

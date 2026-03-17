@@ -57,9 +57,7 @@ export function isToolResult(v: unknown): v is ToolResult {
 	);
 }
 
-export function normalizeToolResult(
-	raw: ToolHandlerReturn | Promise<ToolHandlerReturn>,
-): ToolResult {
+export function normalizeToolResult(raw: ToolHandlerReturn): ToolResult {
 	if (raw === undefined || raw === null) return { content: [] };
 	if (typeof raw === "string") return { content: [{ type: "text", text: raw }] };
 	if (isToolResult(raw)) return raw;

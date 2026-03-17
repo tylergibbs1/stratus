@@ -16,7 +16,7 @@ const BLOCKED_RANGES = [
 	// IPv6
 	/^::1$/,
 	/^fc00:/i,
-	/^fd/i,
+	/^fd[0-9a-f]{2}:/i,
 	/^fe80:/i,
 ];
 

@@ -10,18 +10,14 @@ describe("Bun.serve() transport", () => {
 	});
 
 	test("server.bun() starts and responds to MCP requests", async () => {
+		const port = 19876 + Math.floor(Math.random() * 1000);
 		const server = new McpServer("bun-test@1.0.0")
 			.tool("ping", async () => "pong")
 			.tool("add", z.object({ a: z.number(), b: z.number() }), async ({ a, b }) => String(a + b));
 
-		bunServer = server.bun({ port: 0 }); // port 0 = random available port
-		// Bun.serve with port 0 picks a random port — get it from the URL
-		// Actually Bun.serve doesn't support port 0 like Node. Use a fixed port.
-		bunServer.stop();
-
-		bunServer = server.bun({ port: 9876 });
+		bunServer = server.bun({ port });
 		const url = bunServer.url;
-		expect(url).toContain("9876");
+		expect(url).toContain(String(port));
 
 		// Initialize
 		const initRes = await fetch(url, {
@@ -93,7 +89,7 @@ describe("Bun.serve() transport", () => {
 			.auth({ authenticate: async () => ({ authenticated: false, roles: [], claims: {} }) })
 			.tool("ping", async () => "pong");
 
-		const bs = authServer.bun({ port: 9877 });
+		const bs = authServer.bun({ port: 19877 + Math.floor(Math.random() * 1000) });
 
 		try {
 			const res = await fetch(bs.url, {

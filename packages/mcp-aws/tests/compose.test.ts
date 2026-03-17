@@ -95,17 +95,20 @@ describe("codeMcpServer", () => {
 describe("createMcpHandler", () => {
 	test("returns a request handler function", () => {
 		const server = new SdkMcpServer({ name: "test", version: "1.0.0" });
-		const handler = createMcpHandler({ server });
+		const handler = createMcpHandler({ createServer: () => server });
 		expect(typeof handler).toBe("function");
 	});
 
 	test("handles POST requests with MCP JSON-RPC", async () => {
-		const server = new SdkMcpServer({ name: "test-handler", version: "1.0.0" });
-		server.registerTool("ping", { description: "Ping" }, async () => ({
-			content: [{ type: "text" as const, text: "pong" }],
-		}));
+		const createServer = () => {
+			const s = new SdkMcpServer({ name: "test-handler", version: "1.0.0" });
+			s.registerTool("ping", { description: "Ping" }, async () => ({
+				content: [{ type: "text" as const, text: "pong" }],
+			}));
+			return s;
+		};
 
-		const handler = createMcpHandler({ server });
+		const handler = createMcpHandler({ createServer });
 
 		const request = new Request("https://localhost/mcp", {
 			method: "POST",
@@ -133,7 +136,7 @@ describe("createMcpHandler", () => {
 
 	test("rejects GET with 405", async () => {
 		const server = new SdkMcpServer({ name: "test", version: "1.0.0" });
-		const handler = createMcpHandler({ server });
+		const handler = createMcpHandler({ createServer: () => server });
 
 		const request = new Request("https://localhost/mcp", { method: "GET" });
 		const response = await handler(request);
