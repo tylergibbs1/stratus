@@ -522,10 +522,20 @@ try {
 }
 ```
 
+## Packages
+
+Stratus is a monorepo with two packages:
+
+| Package | Description |
+|---|---|
+| [`stratus-sdk`](packages/stratus-sdk/) | Agent SDK for Azure OpenAI (this README) |
+| [`@stratus/mcp-aws`](packages/mcp-aws/) | MCP server framework for AWS — deploy MCP servers to Lambda with progressive disclosure, tool gating, and code mode |
+
 ## Development
 
 ```bash
-bun test          # Run tests
+bun install       # Install all workspace dependencies
+bun test          # Run tests (all packages)
 bun run lint      # Lint with Biome
 bun run typecheck # TypeScript type checking
 ```
