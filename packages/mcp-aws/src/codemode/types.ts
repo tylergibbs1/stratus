@@ -1,6 +1,6 @@
 /**
  * Code mode: type generation and code normalization for MCP tools.
- * Adapted from stratus-sdk codemode, uses JSON Schema directly
+ * Adapted from @usestratus/sdk codemode, uses JSON Schema directly
  * instead of depending on Zod/zodToJsonSchema.
  */
 

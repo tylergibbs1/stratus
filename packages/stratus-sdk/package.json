@@ -1,5 +1,5 @@
 {
-  "name": "stratus-sdk",
+  "name": "@usestratus/sdk",
   "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.js",

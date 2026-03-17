@@ -24,16 +24,16 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Build stratus-sdk (needed for mcp-aws typecheck)
-        run: bun run --filter stratus-sdk build
+      - name: Build @usestratus/sdk (needed for mcp-aws typecheck)
+        run: bun run --filter @usestratus/sdk build
 
-      - name: Typecheck stratus-sdk
+      - name: Typecheck @usestratus/sdk
         run: bunx tsc -p packages/stratus-sdk/tsconfig.build.json --noEmit
 
       - name: Typecheck mcp-aws
         run: bunx tsc -p packages/mcp-aws/tsconfig.json --noEmit
 
-      - name: Test stratus-sdk
+      - name: Test @usestratus/sdk
         run: bun test packages/stratus-sdk/tests/core packages/stratus-sdk/tests/azure
 
       - name: Test mcp-aws
@@ -52,7 +52,7 @@ jobs:
       - name: Build
         run: bun run --filter '*' build
 
-      - name: Release stratus-sdk if version is new
+      - name: Release @usestratus/sdk if version is new
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -67,7 +67,7 @@ jobs:
             echo "Creating release $TAG"
             gh release create "$TAG" --title "$TAG" --generate-notes
 
-            echo "Publishing stratus-sdk@$VERSION to npm"
+            echo "Publishing @usestratus/sdk@$VERSION to npm"
             npm publish --access public
           fi
 

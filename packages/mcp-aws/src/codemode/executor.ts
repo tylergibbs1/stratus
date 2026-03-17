@@ -1,6 +1,6 @@
 /**
  * Code mode executor: runs LLM-generated code in a sandbox with tool access.
- * Copied from stratus-sdk (no dependency link — this package stands alone).
+ * Copied from @usestratus/sdk (no dependency link — this package stands alone).
  */
 
 import { Worker } from "node:worker_threads";

@@ -14,8 +14,8 @@
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { Agent, run, tool } from "stratus-sdk";
-import { AzureChatCompletionsModel } from "stratus-sdk/azure";
+import { Agent, run, tool } from "@usestratus/sdk";
+import { AzureChatCompletionsModel } from "@usestratus/sdk/azure";
 import { z } from "zod";
 import { deploy, destroy } from "../../src/deploy.js";
 

@@ -10,7 +10,7 @@
 
 [usestratus.dev](https://usestratus.dev)
 
-[![npm version](https://img.shields.io/npm/v/stratus-sdk)](https://www.npmjs.com/package/stratus-sdk)
+[![npm version](https://img.shields.io/npm/v/@usestratus/sdk)](https://www.npmjs.com/package/@usestratus/sdk)
 [![CI](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml)
 
 A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
@@ -27,7 +27,7 @@ A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with t
 ## Install
 
 ```bash
-bun add stratus-sdk
+bun add @usestratus/sdk
 ```
 
 Stratus requires [Zod](https://zod.dev) as a peer dependency:
@@ -40,7 +40,7 @@ bun add zod
 
 ```ts
 import { z } from "zod";
-import { Agent, AzureResponsesModel, run, tool } from "stratus-sdk";
+import { Agent, AzureResponsesModel, run, tool } from "@usestratus/sdk";
 
 const model = new AzureResponsesModel({
   endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -156,7 +156,7 @@ console.log(result.finalOutput); // { name: "Marie Curie", age: 66, occupation: 
 Sessions maintain conversation history across multiple interactions:
 
 ```ts
-import { createSession } from "stratus-sdk";
+import { createSession } from "@usestratus/sdk";
 
 const session = createSession({ model, tools: [myTool] });
 
@@ -188,7 +188,7 @@ await using session = createSession({ model });
 Transfer control between specialized agents:
 
 ```ts
-import { handoff } from "stratus-sdk";
+import { handoff } from "@usestratus/sdk";
 
 const orderAgent = new Agent({
   name: "order_specialist",
@@ -220,7 +220,7 @@ console.log(result.lastAgent.name); // "order_specialist"
 Delegate subtasks to child agents that run independently:
 
 ```ts
-import { subagent } from "stratus-sdk";
+import { subagent } from "@usestratus/sdk";
 
 const researcher = new Agent({
   name: "researcher",
@@ -247,7 +247,7 @@ const parentAgent = new Agent({
 Validate inputs and outputs with guardrails:
 
 ```ts
-import type { InputGuardrail, OutputGuardrail } from "stratus-sdk";
+import type { InputGuardrail, OutputGuardrail } from "@usestratus/sdk";
 
 const profanityFilter: InputGuardrail = {
   name: "profanity_filter",
@@ -280,7 +280,7 @@ Guardrails run in parallel. When a tripwire is triggered, an `InputGuardrailTrip
 Lifecycle hooks for observability and control:
 
 ```ts
-import type { AgentHooks } from "stratus-sdk";
+import type { AgentHooks } from "@usestratus/sdk";
 
 const hooks: AgentHooks = {
   beforeRun: ({ agent, input }) => { /* ... */ },
@@ -307,7 +307,7 @@ const hooks: AgentHooks = {
 Opt-in tracing with zero overhead when inactive:
 
 ```ts
-import { withTrace } from "stratus-sdk";
+import { withTrace } from "@usestratus/sdk";
 
 const { result, trace } = await withTrace("my-workflow", () =>
   run(agent, "Hello"),
@@ -346,7 +346,7 @@ try {
 Track task progress during agent execution:
 
 ```ts
-import { todoTool, TodoList } from "stratus-sdk";
+import { todoTool, TodoList } from "@usestratus/sdk";
 
 const todos = new TodoList();
 todos.onUpdate((items) => {
@@ -371,7 +371,7 @@ await run(agent, "Set up a new TypeScript project");
 Track token usage and estimate costs:
 
 ```ts
-import { createCostEstimator } from "stratus-sdk";
+import { createCostEstimator } from "@usestratus/sdk";
 
 const estimator = createCostEstimator({
   inputTokenCostPer1k: 0.01,
@@ -413,7 +413,7 @@ const agent = new Agent({
 Let LLMs write code that orchestrates multiple tools instead of calling them one at a time. Inspired by [Cloudflare's Code Mode](https://blog.cloudflare.com/code-mode-the-better-way-to-use-mcp) — LLMs are better at writing code than making individual tool calls.
 
 ```ts
-import { createCodeModeTool, FunctionExecutor } from "stratus-sdk/core";
+import { createCodeModeTool, FunctionExecutor } from "@usestratus/sdk/core";
 
 const executor = new FunctionExecutor({ timeout: 30_000 });
 const codemode = createCodeModeTool({
@@ -451,13 +451,13 @@ Stratus provides three export paths:
 
 ```ts
 // Everything (core + Azure)
-import { Agent, run, tool, AzureChatCompletionsModel, AzureResponsesModel } from "stratus-sdk";
+import { Agent, run, tool, AzureChatCompletionsModel, AzureResponsesModel } from "@usestratus/sdk";
 
 // Core only (provider-agnostic)
-import { Agent, run, tool } from "stratus-sdk/core";
+import { Agent, run, tool } from "@usestratus/sdk/core";
 
 // Azure provider only
-import { AzureChatCompletionsModel, AzureResponsesModel } from "stratus-sdk/azure";
+import { AzureChatCompletionsModel, AzureResponsesModel } from "@usestratus/sdk/azure";
 ```
 
 ## Configuration
@@ -509,7 +509,7 @@ All errors extend `StratusError`:
 | `OutputGuardrailTripwireTriggered` | Output guardrail blocked the response |
 
 ```ts
-import { ModelError, MaxTurnsExceededError, RunAbortedError } from "stratus-sdk";
+import { ModelError, MaxTurnsExceededError, RunAbortedError } from "@usestratus/sdk";
 
 try {
   await run(agent, input);
@@ -528,7 +528,7 @@ Stratus is a monorepo with two packages:
 
 | Package | Description |
 |---|---|
-| [`stratus-sdk`](packages/stratus-sdk/) | Agent SDK for Azure OpenAI (this README) |
+| [`@usestratus/sdk`](packages/stratus-sdk/) | Agent SDK for Azure OpenAI (this README) |
 | [`@usestratus/mcp-aws`](packages/mcp-aws/) | MCP server framework for AWS — deploy MCP servers to Lambda with progressive disclosure, tool gating, and code mode |
 
 ## Development
