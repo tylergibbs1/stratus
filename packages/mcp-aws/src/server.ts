@@ -778,6 +778,9 @@ export class McpServer {
 			await transport.close();
 			await mcp.close();
 
+			// Persist session changes (promoted tools, gate unlocks, call history)
+			await sessionStore.set(session);
+
 			return {
 				statusCode: webResponse.status,
 				headers: responseHeaders,
@@ -902,7 +905,12 @@ export class McpServer {
 		const mcpPath = config?.mcpPath ?? "/mcp";
 		const authProvider = this.#authProvider;
 
-		const bunServer = Bun.serve({
+		const BunRuntime = globalThis.Bun;
+		if (!BunRuntime?.serve) {
+			throw new Error("server.bun() requires the Bun runtime. Use server.express() or server.lambda() for Node.js.");
+		}
+
+		const bunServer = BunRuntime.serve({
 			port,
 			hostname,
 			fetch: async (req: Request) => {

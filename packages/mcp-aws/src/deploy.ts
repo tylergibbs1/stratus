@@ -43,6 +43,9 @@ export type DeployConfig = {
 
 	/** Environment variables to set on the Lambda function */
 	environment?: Record<string, string>;
+
+	/** Additional IAM policy ARNs to attach to the Lambda role */
+	policies?: string[];
 };
 
 export type DeployResult = {
@@ -225,7 +228,7 @@ export async function deploy(config: DeployConfig): Promise<DeployResult> {
 
 	let roleArn = config.roleArn;
 	if (!roleArn) {
-		roleArn = await ensureRole(functionName, region, !!vpc);
+		roleArn = await ensureRole(functionName, region, !!vpc, config.policies);
 		await Bun.sleep(15000);
 	}
 
@@ -348,7 +351,7 @@ export async function destroy(functionName: string, region = "us-east-1"): Promi
 	}
 }
 
-async function ensureRole(functionName: string, region: string, needsVpc = false): Promise<string> {
+async function ensureRole(functionName: string, region: string, needsVpc = false, extraPolicies?: string[]): Promise<string> {
 	const { IAMClient, CreateRoleCommand, AttachRolePolicyCommand, GetRoleCommand } = await import(
 		"@aws-sdk/client-iam"
 	);
@@ -375,6 +378,11 @@ async function ensureRole(functionName: string, region: string, needsVpc = false
 					PolicyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
 				}),
 			);
+		}
+		if (extraPolicies) {
+			for (const policyArn of extraPolicies) {
+				await iam.send(new AttachRolePolicyCommand({ RoleName: roleName, PolicyArn: policyArn }));
+			}
 		}
 		return result.Role?.Arn ?? "";
 	}

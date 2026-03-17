@@ -22,14 +22,23 @@ type SerializedSession = {
 	lastAccessedAt: number;
 };
 
+/** Strip non-JSON-serializable values (AbortSignal, functions, etc.) */
+function safeClone<T>(obj: T): T {
+	try {
+		return JSON.parse(JSON.stringify(obj));
+	} catch {
+		return {} as T;
+	}
+}
+
 function serializeSession(session: McpSession): SerializedSession {
 	return {
 		id: session.id,
 		visibleTools: [...session.visibleTools],
 		unlockedGates: [...session.unlockedGates],
-		toolCallHistory: session.toolCallHistory,
-		auth: session.auth,
-		metadata: session.metadata,
+		toolCallHistory: safeClone(session.toolCallHistory),
+		auth: safeClone(session.auth),
+		metadata: safeClone(session.metadata),
 		createdAt: session.createdAt,
 		lastAccessedAt: session.lastAccessedAt,
 	};
