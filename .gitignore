@@ -5,5 +5,5 @@ dist/
 .DS_Store
 *.log
 .breadcrumbs.json
-examples/test-models.json
-examples/test-todo.ts
+**/test-models.json
+**/test-todo.ts
