@@ -24,6 +24,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Build stratus-sdk (needed for mcp-aws typecheck)
+        run: bun run --filter stratus-sdk build
+
       - name: Typecheck stratus-sdk
         run: bunx tsc -p packages/stratus-sdk/tsconfig.build.json --noEmit
 
