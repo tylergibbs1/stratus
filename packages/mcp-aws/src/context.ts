@@ -4,7 +4,7 @@
  *
  * @example
  * ```ts
- * import { getAuthContext, getSession } from "@stratus/mcp-aws";
+ * import { getAuthContext, getSession } from "@usestratus/mcp-aws";
  *
  * server.tool("my_tool", async () => {
  *   const auth = getAuthContext(); // no params needed

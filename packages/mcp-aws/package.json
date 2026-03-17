@@ -1,5 +1,5 @@
 {
-	"name": "@stratus/mcp-aws",
+	"name": "@usestratus/mcp-aws",
 	"version": "0.1.0",
 	"type": "module",
 	"main": "./dist/index.js",

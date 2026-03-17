@@ -29,7 +29,7 @@ export type CodeMcpServerOptions = {
  * @example
  * ```ts
  * import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
- * import { codeMcpServer } from "@stratus/mcp-aws";
+ * import { codeMcpServer } from "@usestratus/mcp-aws";
  *
  * const original = new McpServer({ name: "tools", version: "1.0" });
  * original.registerTool("greet", { inputSchema: { name: z.string() } },
@@ -138,7 +138,7 @@ export type CreateMcpHandlerOptions = {
  * @example
  * ```ts
  * import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
- * import { createMcpHandler } from "@stratus/mcp-aws";
+ * import { createMcpHandler } from "@usestratus/mcp-aws";
  *
  * const server = new McpServer({ name: "api", version: "1.0" });
  * const handler = createMcpHandler({ server });

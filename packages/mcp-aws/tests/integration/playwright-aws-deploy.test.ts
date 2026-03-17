@@ -1,5 +1,5 @@
 /**
- * Real-world test: Playwright MCP server deployed via @stratus/mcp-aws
+ * Real-world test: Playwright MCP server deployed via @usestratus/mcp-aws
  *
  * Tests the FULL stack:
  * 1. server.lambda() produces a working handler

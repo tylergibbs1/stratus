@@ -39,7 +39,7 @@ const BLOCKED_HOSTNAMES = new Set([
  *
  * @example
  * ```ts
- * import { isBlockedUrl } from "@stratus/mcp-aws";
+ * import { isBlockedUrl } from "@usestratus/mcp-aws";
  *
  * server.tool("fetch_url", z.object({ url: z.string() }), async ({ url }) => {
  *   if (isBlockedUrl(url)) return "Blocked: cannot access internal addresses";

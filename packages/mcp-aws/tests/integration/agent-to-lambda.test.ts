@@ -1,6 +1,6 @@
 /**
  * FULL END-TO-END TEST:
- * 1. Define an MCP server with @stratus/mcp-aws
+ * 1. Define an MCP server with @usestratus/mcp-aws
  * 2. Deploy it to AWS Lambda via server.deploy()
  * 3. Create a Stratus agent with Azure OpenAI
  * 4. Agent calls tools on the deployed MCP server

@@ -1,7 +1,7 @@
 /**
  * PRD User Story Tests
  *
- * These tests verify the core user stories from the @stratus/mcp-aws PRD:
+ * These tests verify the core user stories from the @usestratus/mcp-aws PRD:
  * 1. Progressive disclosure: tools/list → search_tools → promote → list_changed
  * 2. Gate denial: structured error returned to agent via MCP protocol
  * 3. Prerequisite gates: requires() unlocks hidden tools after call

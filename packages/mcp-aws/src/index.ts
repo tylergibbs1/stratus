@@ -54,7 +54,7 @@ export { all, any } from "./gating/combinators.js";
 // ── Sessions ────────────────────────────────────────────────────────
 export { MemorySessionStore, type MemorySessionStoreConfig } from "./session/memory.js";
 export { DynamoSessionStore, type DynamoSessionStoreConfig } from "./session/dynamo.js";
-// SqliteSessionStore uses bun:sqlite — import from "@stratus/mcp-aws/sqlite" to avoid
+// SqliteSessionStore uses bun:sqlite — import from "@usestratus/mcp-aws/sqlite" to avoid
 // pulling bun: imports into Lambda bundles that run on Node.js.
 export type { SqliteSessionStoreConfig } from "./session/sqlite.js";
 

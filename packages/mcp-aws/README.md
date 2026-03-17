@@ -1,9 +1,9 @@
-# @stratus/mcp-aws
+# @usestratus/mcp-aws
 
 Build, deploy, and manage MCP servers on AWS in TypeScript. Progressive disclosure, tool gating, code mode, and one-line Lambda deploys.
 
 ```ts
-import { McpServer, apiKey, role, deploy } from "@stratus/mcp-aws";
+import { McpServer, apiKey, role, deploy } from "@usestratus/mcp-aws";
 import { z } from "zod";
 
 const server = new McpServer("my-tools@1.0.0")
@@ -21,7 +21,7 @@ export const handler = server.lambda();
 ## Install
 
 ```bash
-bun add @stratus/mcp-aws zod
+bun add @usestratus/mcp-aws zod
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ bun add @stratus/mcp-aws zod
 ### 5 lines to a working MCP server
 
 ```ts
-import { McpServer } from "@stratus/mcp-aws";
+import { McpServer } from "@usestratus/mcp-aws";
 import { z } from "zod";
 
 const server = new McpServer("my-server@1.0.0");
@@ -121,7 +121,7 @@ Configure once on the server. All transports inherit it.
 ### API Key
 
 ```ts
-import { apiKey } from "@stratus/mcp-aws";
+import { apiKey } from "@usestratus/mcp-aws";
 
 server.auth(apiKey({
   "sk-live-abc123": { subject: "user-1", roles: ["admin"] },
@@ -132,7 +132,7 @@ server.auth(apiKey({
 ### Cognito JWT
 
 ```ts
-import { cognito } from "@stratus/mcp-aws";
+import { cognito } from "@usestratus/mcp-aws";
 
 server.auth(cognito({
   userPoolId: "us-east-1_abc123",
@@ -156,7 +156,7 @@ server.auth(
 Tool handlers can access auth without explicit parameters:
 
 ```ts
-import { getAuthContext, getSession } from "@stratus/mcp-aws";
+import { getAuthContext, getSession } from "@usestratus/mcp-aws";
 
 server.tool("my_tool", async () => {
   const auth = getAuthContext(); // works anywhere in the call stack
@@ -213,7 +213,7 @@ Access control at the tool level.
 ### Role-Based
 
 ```ts
-import { role } from "@stratus/mcp-aws";
+import { role } from "@usestratus/mcp-aws";
 
 server.tool("admin_action", { gate: role("admin") }, handler);
 server.tool("write_action", { gate: role("admin", "editor") }, handler); // any of these roles
@@ -222,7 +222,7 @@ server.tool("write_action", { gate: role("admin", "editor") }, handler); // any 
 ### Prerequisite (Workflow Enforcement)
 
 ```ts
-import { requires } from "@stratus/mcp-aws";
+import { requires } from "@usestratus/mcp-aws";
 
 server
   .tool("review_trade", handler)
@@ -234,7 +234,7 @@ server
 ### Dynamic Check
 
 ```ts
-import { check } from "@stratus/mcp-aws";
+import { check } from "@usestratus/mcp-aws";
 
 server.tool("update_deal", {
   gate: check((ctx) => ctx.auth.claims.org === "acme", "Wrong org"),
@@ -244,7 +244,7 @@ server.tool("update_deal", {
 ### Rate Limiting
 
 ```ts
-import { rateLimit } from "@stratus/mcp-aws";
+import { rateLimit } from "@usestratus/mcp-aws";
 
 server.tool("expensive_op", {
   gate: rateLimit({ max: 10, windowMs: 60_000 }),
@@ -254,7 +254,7 @@ server.tool("expensive_op", {
 ### Composite Gates
 
 ```ts
-import { all, any, role, requires, rateLimit } from "@stratus/mcp-aws";
+import { all, any, role, requires, rateLimit } from "@usestratus/mcp-aws";
 
 server.tool("approve_discount", {
   gate: all(
@@ -300,7 +300,7 @@ This registers an `execute_workflow` tool. The agent:
 ### Wrap Any Existing MCP Server
 
 ```ts
-import { codeMcpServer } from "@stratus/mcp-aws";
+import { codeMcpServer } from "@usestratus/mcp-aws";
 
 const codeServer = await codeMcpServer({ server: existingMcpServer });
 // → codeServer has one tool: execute_code
@@ -316,7 +316,7 @@ const codeServer = await codeMcpServer({ server: existingMcpServer });
 export const handler = server.lambda();
 
 // With session store
-import { DynamoSessionStore } from "@stratus/mcp-aws/dynamo";
+import { DynamoSessionStore } from "@usestratus/mcp-aws/dynamo";
 
 export const handler = server.lambda({
   sessionStore: new DynamoSessionStore({ tableName: "mcp-sessions" }),
@@ -352,7 +352,7 @@ await server.stdio();
 ### Stateless Handler (Bun/Deno/Any Runtime)
 
 ```ts
-import { createMcpHandler } from "@stratus/mcp-aws";
+import { createMcpHandler } from "@usestratus/mcp-aws";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const handler = createMcpHandler({ server: myMcpServer });
@@ -419,7 +419,7 @@ await server.deploy({
 Prevent tools from accessing internal infrastructure:
 
 ```ts
-import { isBlockedUrl, assertSafeUrl } from "@stratus/mcp-aws";
+import { isBlockedUrl, assertSafeUrl } from "@usestratus/mcp-aws";
 
 server.tool("fetch", z.object({ url: z.string() }), async ({ url }) => {
   assertSafeUrl(url); // throws if private IP, metadata endpoint, etc.
@@ -464,7 +464,7 @@ Events: `tool:call`, `tool:result`, `gate:denied`, `auth:success`, `auth:failure
 ### Memory (dev/test)
 
 ```ts
-import { MemorySessionStore } from "@stratus/mcp-aws";
+import { MemorySessionStore } from "@usestratus/mcp-aws";
 
 server.lambda({ sessionStore: new MemorySessionStore({ ttlMs: 3600_000 }) });
 ```
@@ -472,7 +472,7 @@ server.lambda({ sessionStore: new MemorySessionStore({ ttlMs: 3600_000 }) });
 ### DynamoDB (production)
 
 ```ts
-import { DynamoSessionStore } from "@stratus/mcp-aws/dynamo";
+import { DynamoSessionStore } from "@usestratus/mcp-aws/dynamo";
 
 server.lambda({
   sessionStore: new DynamoSessionStore({
@@ -486,7 +486,7 @@ server.lambda({
 ### SQLite (ECS/Fargate/EC2)
 
 ```ts
-import { SqliteSessionStore } from "@stratus/mcp-aws";
+import { SqliteSessionStore } from "@usestratus/mcp-aws";
 
 server.lambda({
   sessionStore: new SqliteSessionStore({
@@ -503,7 +503,7 @@ Uses Bun's native `bun:sqlite`. Zero dependencies. Supports file persistence acr
 Implement the `SessionStore` interface:
 
 ```ts
-import type { SessionStore, McpSession } from "@stratus/mcp-aws";
+import type { SessionStore, McpSession } from "@usestratus/mcp-aws";
 
 class RedisSessionStore implements SessionStore {
   async get(sessionId: string): Promise<McpSession | undefined> { /* ... */ }
@@ -549,7 +549,7 @@ server.lambda({
 ## Full Example: Playwright MCP on Lambda
 
 ```ts
-import { McpServer, apiKey, role } from "@stratus/mcp-aws";
+import { McpServer, apiKey, role } from "@usestratus/mcp-aws";
 import { z } from "zod";
 
 const server = new McpServer("playwright@1.0.0")

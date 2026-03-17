@@ -84,8 +84,8 @@ jobs:
             echo "Release $TAG already exists, skipping"
           else
             echo "Creating release $TAG"
-            gh release create "$TAG" --title "@stratus/mcp-aws $VERSION" --generate-notes
+            gh release create "$TAG" --title "@usestratus/mcp-aws $VERSION" --generate-notes
 
-            echo "Publishing @stratus/mcp-aws@$VERSION to npm"
+            echo "Publishing @usestratus/mcp-aws@$VERSION to npm"
             npm publish --access public
           fi

@@ -1,5 +1,5 @@
 /**
- * Example: Playwright MCP tools served via @stratus/mcp-aws
+ * Example: Playwright MCP tools served via @usestratus/mcp-aws
  *
  * 59 tools → progressive disclosure with 3 tiers:
  * - always: core navigation + snapshot (3 tools)
