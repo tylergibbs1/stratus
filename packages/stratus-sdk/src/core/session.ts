@@ -234,9 +234,13 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		} finally {
 			this._streaming = false;
 
-			if (!streamError && this._store && !this._closed) {
-				await this._store.save(this.id, this.save());
-				this._onStateChange?.({ type: "saved", sessionId: this.id });
+			try {
+				if (!streamError && this._store && !this._closed) {
+					await this._store.save(this.id, this.save());
+					this._onStateChange?.({ type: "saved", sessionId: this.id });
+				}
+			} catch {
+				// Don't let save failures prevent stream_end
 			}
 
 			this._onStateChange?.({ type: "stream_end" });

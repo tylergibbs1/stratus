@@ -895,6 +895,25 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				return;
 			}
 
+			// Check for tools that need approval before executing
+			const pendingApprovals = await collectPendingApprovals(
+				currentAgent,
+				finalResponse.toolCalls,
+				ctx.context,
+			);
+			if (pendingApprovals.length > 0) {
+				const interrupted = new InterruptedRunResult<TOutput>({
+					pendingToolCalls: pendingApprovals,
+					messages: [...messages],
+					currentAgent,
+					context: ctx.context,
+					numTurns: ctx.numTurns,
+					usage: ctx.usage,
+				});
+				resolveResult(interrupted as unknown as RunResult<TOutput>);
+				return;
+			}
+
 			// Use a channel to relay subagent stream events in real time
 			const channel = createStreamEventChannel();
 			const toolExecPromise = executeToolCallsWithHandoffs(
@@ -909,10 +928,16 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				toolOutputGuardrails,
 				(event) => channel.push(event),
 				dynamicSubagents,
-			).then((result) => {
-				channel.done();
-				return result;
-			});
+			).then(
+				(result) => {
+					channel.done();
+					return result;
+				},
+				(error) => {
+					channel.done();
+					throw error;
+				},
+			);
 
 			for await (const event of channel) {
 				yield event;
@@ -1575,10 +1600,13 @@ export async function resumeRun<TContext, TOutput = undefined>(
 			}
 			try {
 				const params = JSON.parse(tc.function.arguments);
-				const result = await executeWithTimeout(
+				const result = await executeToolWithRetry(
 					() => matchedTool.execute(context, params, { signal }),
-					matchedTool.timeout,
-					tc.function.name,
+					{
+						timeout: matchedTool.timeout,
+						retries: matchedTool.retries,
+						name: tc.function.name,
+					},
 				);
 				toolMessages.push({
 					role: "tool",
