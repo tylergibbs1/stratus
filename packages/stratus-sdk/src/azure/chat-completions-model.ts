@@ -10,6 +10,7 @@ import type {
 } from "../core/model";
 import type { ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition } from "../core/types";
 import { resolveChatCompletionsUrl } from "./endpoint";
+import { abortableSleep, computeRetryDelay } from "./retry";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureChatCompletionsModelConfig {
@@ -18,6 +19,8 @@ export interface AzureChatCompletionsModelConfig {
 	azureAdTokenProvider?: () => Promise<string>;
 	deployment: string;
 	apiVersion?: string;
+	/** Maximum number of retries on 429 / network errors (default 3). */
+	maxRetries?: number;
 }
 
 const DEFAULT_API_VERSION = "2025-03-01-preview";
@@ -27,6 +30,7 @@ export class AzureChatCompletionsModel implements Model {
 	private readonly apiKey?: string;
 	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
+	private readonly maxRetries: number;
 
 	constructor(config: AzureChatCompletionsModelConfig) {
 		if (config.apiKey && config.azureAdTokenProvider) {
@@ -38,6 +42,7 @@ export class AzureChatCompletionsModel implements Model {
 		this.apiKey = config.apiKey;
 		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
+		this.maxRetries = config.maxRetries ?? 3;
 		this.url = resolveChatCompletionsUrl(
 			config.endpoint,
 			config.deployment,
@@ -50,7 +55,8 @@ export class AzureChatCompletionsModel implements Model {
 			const token = await this.tokenProvider();
 			return { Authorization: `Bearer ${token}` };
 		}
-		return { "api-key": this.apiKey! };
+		// Constructor validates exactly one of apiKey/tokenProvider is set.
+		return { "api-key": this.apiKey as string };
 	}
 
 	async getResponse(request: ModelRequest, options?: ModelRequestOptions): Promise<ModelResponse> {
@@ -205,25 +211,42 @@ export class AzureChatCompletionsModel implements Model {
 	}
 
 	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-		const maxRetries = 3;
-		for (let attempt = 0; attempt <= maxRetries; attempt++) {
-			const authHeaders = await this.getAuthHeaders();
-			const response = await fetch(this.url, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...authHeaders,
-				},
-				body: JSON.stringify(body),
-				signal,
-			});
+		for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+			let response: Response;
+			try {
+				const authHeaders = await this.getAuthHeaders();
+				response = await fetch(this.url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						...authHeaders,
+					},
+					body: JSON.stringify(body),
+					signal,
+				});
+			} catch (fetchErr) {
+				if (signal?.aborted) throw fetchErr;
+				if (attempt < this.maxRetries) {
+					const waitMs = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 30000);
+					await abortableSleep(waitMs, signal);
+					if (signal?.aborted) throw fetchErr;
+					continue;
+				}
+				throw new ModelError(
+					`Azure API network error after ${this.maxRetries + 1} attempts: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+					{ cause: fetchErr },
+				);
+			}
 
-			if (response.status === 429 && attempt < maxRetries) {
-				const retryAfter = response.headers.get("retry-after");
-				const waitMs = retryAfter
-					? Number.parseInt(retryAfter, 10) * 1000
-					: Math.min(1000 * 2 ** attempt, 30000);
-				await new Promise((r) => setTimeout(r, waitMs));
+			if (response.status === 429 && attempt < this.maxRetries) {
+				const waitMs = computeRetryDelay(response.headers, attempt);
+				console.warn(
+					`[AzureChatCompletionsModel] 429 rate limited, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
+				);
+				await abortableSleep(waitMs, signal);
+				if (signal?.aborted) {
+					throw new ModelError("Azure API request aborted during retry backoff", { status: 429 });
+				}
 				continue;
 			}
 
@@ -234,6 +257,8 @@ export class AzureChatCompletionsModel implements Model {
 			return response;
 		}
 
+		// Unreachable: the final iteration always returns or throws above.
+		// Kept for TypeScript's control-flow analysis.
 		throw new ModelError("Max retries exceeded for Azure API request");
 	}
 

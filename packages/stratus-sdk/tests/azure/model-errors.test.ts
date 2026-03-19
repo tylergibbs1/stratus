@@ -80,7 +80,7 @@ describe("AzureChatCompletionsModel error handling", () => {
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 			{
 				ok: true,
@@ -205,25 +205,25 @@ describe("AzureChatCompletionsModel error handling", () => {
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 			{
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 			{
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 			{
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 		]);
 
@@ -258,7 +258,7 @@ describe("AzureResponsesModel error handling", () => {
 				ok: false,
 				status: 429,
 				text: "Rate limited",
-				headers: new Headers({ "retry-after": "0" }),
+				headers: new Headers({ "retry-after-ms": "1" }),
 			},
 			{
 				ok: true,
