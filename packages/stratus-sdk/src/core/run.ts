@@ -81,7 +81,7 @@ function createStreamEventChannel(): {
 			resolve = undefined;
 		},
 		[Symbol.asyncIterator]() {
-			return {
+			const iter: AsyncIterableIterator<StreamEvent> = {
 				async next(): Promise<IteratorResult<StreamEvent>> {
 					while (queue.length === 0 && !finished) {
 						await new Promise<void>((r) => {
@@ -93,7 +93,11 @@ function createStreamEventChannel(): {
 					}
 					return { value: undefined as any, done: true };
 				},
+				[Symbol.asyncIterator]() {
+					return iter;
+				},
 			};
+			return iter;
 		},
 	};
 }
