@@ -239,7 +239,7 @@ describe("MCP → AWS speed test", () => {
 		const result = await run(agent, "Document https://example.com", { maxTurns: 5 });
 		const agentMs = Date.now() - start;
 
-		const toolCalls = result.toInputList().filter((m) => m.role === "tool");
+		const toolCalls = !result.interrupted ? result.toInputList().filter((m: { role: string }) => m.role === "tool") : [];
 		console.log(`\n  AGENT TIME: ${(agentMs / 1000).toFixed(1)}s`);
 		console.log(`  Turns: ${result.numTurns}`);
 		console.log(`  Tool calls: ${toolCalls.length}`);

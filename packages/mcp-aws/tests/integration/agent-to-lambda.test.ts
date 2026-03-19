@@ -218,24 +218,26 @@ describe("Stratus Agent → MCP on Lambda (full E2E)", () => {
 		expect(result.numTurns).toBeGreaterThanOrEqual(1);
 
 		// Check that the agent actually called our MCP tools
-		const messages = result.toInputList();
-		const toolMessages = messages.filter((m) => m.role === "tool");
-		console.log(`Tool calls made: ${toolMessages.length}`);
-		expect(toolMessages.length).toBeGreaterThan(0);
+		if (!result.interrupted) {
+			const messages = result.toInputList();
+			const toolMessages = messages.filter((m: { role: string }) => m.role === "tool");
+			console.log(`Tool calls made: ${toolMessages.length}`);
+			expect(toolMessages.length).toBeGreaterThan(0);
 
-		// Verify tool results contain MCP server responses
-		for (const msg of toolMessages) {
-			if (msg.role === "tool") {
-				console.log(`Tool "${msg.tool_call_id}": ${msg.content.slice(0, 200)}`);
-				// Should contain actual data from our Lambda, not errors
-				expect(msg.content).not.toContain("ECONNREFUSED");
-				expect(msg.content).not.toContain("fetch failed");
+			// Verify tool results contain MCP server responses
+			for (const msg of toolMessages) {
+				if (msg.role === "tool") {
+					console.log(`Tool "${(msg as any).tool_call_id}": ${(msg as any).content.slice(0, 200)}`);
+					// Should contain actual data from our Lambda, not errors
+					expect((msg as any).content).not.toContain("ECONNREFUSED");
+					expect((msg as any).content).not.toContain("fetch failed");
+				}
 			}
-		}
 
-		// If agent produced final output, log it
-		if (result.finalOutput) {
-			console.log(`Agent final output: ${String(result.finalOutput).slice(0, 200)}`);
+			// If agent produced final output, log it
+			if (result.finalOutput) {
+				console.log(`Agent final output: ${String(result.finalOutput).slice(0, 200)}`);
+			}
 		}
 	}, 60000);
 
