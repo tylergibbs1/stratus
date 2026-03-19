@@ -32,6 +32,8 @@ export interface ModelResponse {
 	usage?: UsageInfo;
 	finishReason?: FinishReason;
 	responseId?: string;
+	incompleteDetails?: { reason?: string };
+	outputItems?: Record<string, unknown>[];
 }
 
 export type StreamEvent =
@@ -44,6 +46,9 @@ export type StreamEvent =
 			toolType: string;
 			status: "in_progress" | "completed" | "searching" | "generating" | "interpreting";
 	  }
+	| { type: "subagent_start"; agentName: string }
+	| { type: "subagent_delta"; agentName: string; content: string }
+	| { type: "subagent_end"; agentName: string; result: string }
 	| { type: "done"; response: ModelResponse };
 
 export interface ModelRequestOptions {

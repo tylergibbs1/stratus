@@ -3,6 +3,39 @@ import type { GuardrailRunResult } from "./guardrails";
 import type { FinishReason, UsageInfo } from "./model";
 import type { ChatMessage } from "./types";
 
+export interface PendingToolCall {
+	toolCallId: string;
+	toolName: string;
+	arguments: string;
+	parsedArguments: unknown;
+}
+
+export class InterruptedRunResult<TOutput = undefined> {
+	readonly interrupted = true as const;
+	readonly pendingToolCalls: PendingToolCall[];
+	readonly messages: ChatMessage[];
+	readonly currentAgent: Agent<any, TOutput>;
+	readonly context: any;
+	readonly numTurns: number;
+	readonly usage: UsageInfo | undefined;
+
+	constructor(options: {
+		pendingToolCalls: PendingToolCall[];
+		messages: ChatMessage[];
+		currentAgent: Agent<any, TOutput>;
+		context: any;
+		numTurns: number;
+		usage?: UsageInfo;
+	}) {
+		this.pendingToolCalls = options.pendingToolCalls;
+		this.messages = options.messages;
+		this.currentAgent = options.currentAgent;
+		this.context = options.context;
+		this.numTurns = options.numTurns;
+		this.usage = options.usage;
+	}
+}
+
 export interface RunResultOptions<TOutput = undefined> {
 	output: string;
 	messages: ChatMessage[];
@@ -18,6 +51,7 @@ export interface RunResultOptions<TOutput = undefined> {
 }
 
 export class RunResult<TOutput = undefined> {
+	readonly interrupted = false as const;
 	readonly output: string;
 	readonly finalOutput: TOutput extends undefined ? undefined : TOutput;
 	readonly messages: ChatMessage[];

@@ -4,6 +4,7 @@ import { zodToJsonSchema } from "./utils/zod";
 
 export interface ToolExecuteOptions {
 	signal?: AbortSignal;
+	onStreamEvent?: (event: import("./model").StreamEvent) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,6 +22,21 @@ export interface FunctionTool<TParams = any, TContext = any> {
 	timeout?: number;
 	/** If false or returns false, the tool is excluded from the tools list sent to the LLM. */
 	isEnabled?: boolean | ((context: TContext) => boolean | Promise<boolean>);
+	/** If true or returns true, the run loop pauses for approval before executing this tool. */
+	needsApproval?: boolean | ((params: TParams, context: TContext) => boolean | Promise<boolean>);
+	/** Retry configuration for transient tool failures. */
+	retries?: {
+		/** Maximum number of retry attempts (default: 0 = no retries). */
+		limit: number;
+		/** Base delay in ms between retries (default: 1000). */
+		delay?: number;
+		/** Backoff strategy (default: "exponential"). */
+		backoff?: "fixed" | "exponential";
+		/** Predicate to decide if the error is retryable. Defaults to retrying all errors. */
+		shouldRetry?: (error: unknown) => boolean;
+	};
+	/** Raw JSON Schema override. When set, toolToDefinition uses this instead of zodToJsonSchema. Used by McpClient. */
+	_rawJsonSchema?: Record<string, unknown>;
 }
 
 export function tool<TParams, TContext = unknown>(config: {
@@ -34,6 +50,8 @@ export function tool<TParams, TContext = unknown>(config: {
 	) => Promise<string> | string;
 	timeout?: number;
 	isEnabled?: boolean | ((context: TContext) => boolean | Promise<boolean>);
+	needsApproval?: boolean | ((params: TParams, context: TContext) => boolean | Promise<boolean>);
+	retries?: FunctionTool<TParams, TContext>["retries"];
 }): FunctionTool<TParams, TContext> {
 	return {
 		type: "function",
@@ -43,6 +61,8 @@ export function tool<TParams, TContext = unknown>(config: {
 		execute: config.execute,
 		timeout: config.timeout,
 		isEnabled: config.isEnabled,
+		needsApproval: config.needsApproval,
+		retries: config.retries,
 	};
 }
 
@@ -52,7 +72,7 @@ export function toolToDefinition(t: FunctionTool): ToolDefinition {
 		function: {
 			name: t.name,
 			description: t.description,
-			parameters: zodToJsonSchema(t.parameters),
+			parameters: t._rawJsonSchema ?? zodToJsonSchema(t.parameters),
 		},
 	};
 }

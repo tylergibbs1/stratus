@@ -140,6 +140,8 @@ export class AzureResponsesModel implements Model {
 			// Deferred error from response.failed with no error details —
 			// allows the subsequent `error` SSE event to provide the real message.
 			let deferredFailure: string | undefined;
+			let streamIncompleteDetails: { reason?: string } | undefined;
+			let streamOutputItems: Record<string, unknown>[] | undefined;
 			let hasYielded = false;
 			let sseRateLimited = false;
 
@@ -240,6 +242,12 @@ export class AzureResponsesModel implements Model {
 							};
 						}
 						finishReason = mapStatus(resp?.status);
+						if (resp?.incomplete_details) {
+							streamIncompleteDetails = resp.incomplete_details;
+						}
+						if (resp?.output) {
+							streamOutputItems = extractUnknownItems(resp.output);
+						}
 						break;
 					}
 					case "response.failed": {
@@ -304,6 +312,10 @@ export class AzureResponsesModel implements Model {
 					usage,
 					finishReason,
 					responseId,
+					...(streamIncompleteDetails ? { incompleteDetails: streamIncompleteDetails } : {}),
+					...(streamOutputItems && streamOutputItems.length > 0
+						? { outputItems: streamOutputItems }
+						: {}),
 				},
 			};
 			return; // success — exit retry loop
@@ -373,6 +385,7 @@ export class AzureResponsesModel implements Model {
 			if (s.store !== undefined) body.store = s.store;
 			if (s.metadata !== undefined) body.metadata = s.metadata;
 			if (s.user !== undefined) body.user = s.user;
+			// logprobs/topLogprobs are Chat Completions-only; not supported by the Responses API.
 		}
 
 		return body;
@@ -485,19 +498,24 @@ export class AzureResponsesModel implements Model {
 
 	private parseResponse(json: ResponsesApiResponse): ModelResponse {
 		if (json.status === "incomplete") {
-			const toolCalls = extractToolCalls(json.output ?? []);
+			const output = json.output ?? [];
+			const toolCalls = extractToolCalls(output);
+			const unknownItems = extractUnknownItems(output);
 			return {
-				content: extractTextContent(json.output ?? []),
+				content: extractTextContent(output),
 				toolCalls,
 				usage: json.usage ? parseResponsesUsage(json.usage) : undefined,
 				finishReason: "length",
 				responseId: json.id,
+				incompleteDetails: json.incomplete_details,
+				...(unknownItems.length > 0 ? { outputItems: unknownItems } : {}),
 			};
 		}
 
 		const output = json.output ?? [];
 		const toolCalls = extractToolCalls(output);
 		const content = extractTextContent(output);
+		const unknownItems = extractUnknownItems(output);
 
 		const usage: UsageInfo | undefined = json.usage ? parseResponsesUsage(json.usage) : undefined;
 
@@ -509,6 +527,8 @@ export class AzureResponsesModel implements Model {
 			usage,
 			finishReason,
 			responseId: json.id,
+			...(json.incomplete_details ? { incompleteDetails: json.incomplete_details } : {}),
+			...(unknownItems.length > 0 ? { outputItems: unknownItems } : {}),
 		};
 	}
 }
@@ -556,6 +576,16 @@ function extractToolCalls(output: ResponsesOutputItem[]): ToolCall[] {
 		}
 	}
 	return calls;
+}
+
+function extractUnknownItems(output: ResponsesOutputItem[]): Record<string, unknown>[] {
+	const items: Record<string, unknown>[] = [];
+	for (const item of output) {
+		if (item.type !== "message" && item.type !== "function_call") {
+			items.push(item as Record<string, unknown>);
+		}
+	}
+	return items;
 }
 
 function convertMessages(messages: ChatMessage[]): {
@@ -617,15 +647,37 @@ function convertUserContent(content: string | ContentPart[]): ResponsesContentPa
 	if (typeof content === "string") {
 		return [{ type: "input_text", text: content }];
 	}
-	return content.map((part) => {
-		if (part.type === "text") {
-			return { type: "input_text" as const, text: part.text };
+	return content.map((part): ResponsesContentPart => {
+		switch (part.type) {
+			case "text":
+				return { type: "input_text" as const, text: part.text };
+			case "image_url":
+				return {
+					type: "input_image" as const,
+					image_url: part.image_url.url,
+					detail: part.image_url.detail,
+				};
+			case "file": {
+				const filePart: ResponsesContentPart =
+					"url" in part.file
+						? { type: "input_file" as const, file_data: part.file.url }
+						: { type: "input_file" as const, file_id: part.file.file_id };
+				if (part.filename) {
+					(filePart as { filename?: string }).filename = part.filename;
+				}
+				return filePart;
+			}
+			case "audio": {
+				if ("url" in part.audio) {
+					return { type: "input_audio" as const, audio_url: part.audio.url };
+				}
+				return {
+					type: "input_audio" as const,
+					data: part.audio.data,
+					format: part.audio.format,
+				};
+			}
 		}
-		return {
-			type: "input_image" as const,
-			image_url: part.image_url.url,
-			detail: part.image_url.detail,
-		};
 	});
 }
 
@@ -690,15 +742,25 @@ interface ResponsesApiResponse {
 	status: string;
 	output?: ResponsesOutputItem[];
 	usage?: ResponsesUsage;
+	incomplete_details?: { reason?: string };
 }
 
 type ResponsesOutputItem =
 	| { type: "message"; content?: { type: string; text?: string }[] }
-	| { type: "function_call"; call_id: string; name: string; arguments?: string };
+	| { type: "function_call"; call_id: string; name: string; arguments?: string }
+	| {
+			type: "mcp_approval_request";
+			id: string;
+			name: string;
+			arguments?: string;
+			server_label: string;
+	  };
 
 type ResponsesContentPart =
 	| { type: "input_text"; text: string }
 	| { type: "input_image"; image_url: string; detail?: string }
+	| { type: "input_file"; file_data?: string; file_id?: string; filename?: string }
+	| { type: "input_audio"; audio_url?: string; data?: string; format?: string }
 	| { type: "output_text"; text: string };
 
 type ResponsesInputItem =
@@ -734,7 +796,13 @@ type ResponsesStreamEvent =
 	| { type: "response.output_item.done"; item?: ResponsesStreamItem }
 	| {
 			type: "response.completed";
-			response?: { id?: string; status?: string; usage?: ResponsesUsage };
+			response?: {
+				id?: string;
+				status?: string;
+				usage?: ResponsesUsage;
+				incomplete_details?: { reason?: string };
+				output?: ResponsesOutputItem[];
+			};
 	  }
 	// Hosted tool streaming events
 	| { type: "response.web_search_call.in_progress" }

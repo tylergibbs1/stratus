@@ -17,6 +17,26 @@ import type { CallModelInputFilter, ToolErrorFormatter } from "./run";
 import type { SubAgent } from "./subagent";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 
+export type SessionStateChangeEvent =
+	| { type: "message_added"; message: ChatMessage }
+	| { type: "stream_start" }
+	| { type: "stream_end" }
+	| { type: "saved"; sessionId: string };
+
+export type SessionStateChangeListener = (event: SessionStateChangeEvent) => void;
+
+/** Pluggable persistence backend for session state. */
+export interface SessionStore {
+	/** Save a session snapshot. */
+	save(sessionId: string, snapshot: SessionSnapshot): Promise<void>;
+	/** Load a session snapshot. Returns undefined if not found. */
+	load(sessionId: string): Promise<SessionSnapshot | undefined>;
+	/** Delete a session. */
+	delete(sessionId: string): Promise<void>;
+	/** List all session IDs. */
+	list?(): Promise<string[]>;
+}
+
 export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	model: Model;
 	instructions?: Instructions<TContext>;
@@ -39,6 +59,12 @@ export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	toolInputGuardrails?: ToolInputGuardrail<TContext>[];
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
 	resetToolChoice?: boolean;
+	/** Optional persistence backend. When set, sessions auto-save after each interaction. */
+	store?: SessionStore;
+	/** Session ID for persistence. Auto-generated if not provided. */
+	sessionId?: string;
+	/** Callback fired when session state changes. Useful for UI frameworks. */
+	onStateChange?: SessionStateChangeListener;
 }
 
 export interface SessionSnapshot {
@@ -61,6 +87,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _toolInputGuardrails: ToolInputGuardrail<TContext>[];
 	private readonly _toolOutputGuardrails: ToolOutputGuardrail<TContext>[];
 	private readonly _resetToolChoice: boolean | undefined;
+	private readonly _store: SessionStore | undefined;
+	private readonly _onStateChange: SessionStateChangeListener | undefined;
 	private _messages: ChatMessage[] = [];
 	private _resultPromise: Promise<RunResult<TOutput>> | null = null;
 	private _streaming = false;
@@ -71,7 +99,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		config: SessionConfig<TContext, TOutput>,
 		restore?: { id?: string; messages?: ChatMessage[] },
 	) {
-		this.id = restore?.id ?? crypto.randomUUID();
+		this.id = restore?.id ?? config.sessionId ?? crypto.randomUUID();
 		this._context = config.context;
 		this._maxTurns = config.maxTurns;
 		this._costEstimator = config.costEstimator;
@@ -83,6 +111,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this._toolInputGuardrails = config.toolInputGuardrails ?? [];
 		this._toolOutputGuardrails = config.toolOutputGuardrails ?? [];
 		this._resetToolChoice = config.resetToolChoice;
+		this._store = config.store;
+		this._onStateChange = config.onStateChange;
 		this._agent = new Agent<TContext, TOutput>({
 			name: "session_agent",
 			model: config.model,
@@ -105,7 +135,9 @@ export class Session<TContext = unknown, TOutput = undefined> {
 
 	send(message: string | ContentPart[]): void {
 		if (this._closed) throw new StratusError("Session is closed");
-		this._messages.push({ role: "user", content: message });
+		const msg: ChatMessage = { role: "user", content: message };
+		this._messages.push(msg);
+		this._onStateChange?.({ type: "message_added", message: msg });
 		this._resultPromise = null;
 	}
 
@@ -149,6 +181,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 
 	private async *_streamInternal(signal?: AbortSignal): AsyncGenerator<StreamEvent> {
 		this._streaming = true;
+		this._onStateChange?.({ type: "stream_start" });
 
 		// Fire onSessionStart on first stream
 		if (!this._started) {
@@ -158,6 +191,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			}
 		}
 
+		let streamError = false;
 		try {
 			const { stream: s, result: resultPromise } = coreStream(this._agent, [...this._messages], {
 				context: this._context,
@@ -176,7 +210,14 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			});
 
 			this._resultPromise = resultPromise.then((result) => {
+				const oldLength = this._messages.length;
 				this._messages = result.messages.filter((m) => m.role !== "system");
+				// Emit message_added for new messages beyond what we already had
+				if (this._onStateChange) {
+					for (let i = oldLength; i < this._messages.length; i++) {
+						this._onStateChange({ type: "message_added", message: this._messages[i]! });
+					}
+				}
 				return result;
 			});
 			// Prevent unhandled rejection if user doesn't await .result
@@ -187,8 +228,22 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			}
 
 			await this._resultPromise;
+		} catch (err) {
+			streamError = true;
+			throw err;
 		} finally {
 			this._streaming = false;
+
+			try {
+				if (!streamError && this._store && !this._closed) {
+					await this._store.save(this.id, this.save());
+					this._onStateChange?.({ type: "saved", sessionId: this.id });
+				}
+			} catch {
+				// Don't let save failures prevent stream_end
+			}
+
+			this._onStateChange?.({ type: "stream_end" });
 
 			// Fire onSessionEnd in finally
 			if (this._hooks?.onSessionEnd) {
@@ -221,6 +276,16 @@ export function forkSession<TContext = unknown, TOutput = undefined>(
 	return new Session(config, {
 		messages: structuredClone(snapshot.messages),
 	});
+}
+
+export async function loadSession<TContext = unknown, TOutput = undefined>(
+	store: SessionStore,
+	sessionId: string,
+	config: SessionConfig<TContext, TOutput>,
+): Promise<Session<TContext, TOutput> | undefined> {
+	const snapshot = await store.load(sessionId);
+	if (!snapshot) return undefined;
+	return resumeSession(snapshot, { ...config, store });
 }
 
 export async function prompt<TContext = unknown, TOutput = undefined>(

@@ -2,23 +2,35 @@ export { Agent } from "./agent";
 export type { AgentConfig, HandoffInput, Instructions } from "./agent";
 
 export { RunContext } from "./context";
-export { RunResult } from "./result";
-export type { RunResultOptions } from "./result";
-export { run, stream } from "./run";
+export { InterruptedRunResult, RunResult } from "./result";
+export type { PendingToolCall, RunResultOptions } from "./result";
+export { resumeRun, run, stream } from "./run";
 export type {
 	RunOptions,
 	StreamOptions,
 	StreamedRunResult,
+	ToolApproval,
 	ToolErrorFormatter,
 	CallModelInputFilter,
 	MaxTurnsErrorHandler,
 } from "./run";
 
-export { createSession, forkSession, prompt, resumeSession, Session } from "./session";
-export type { SessionConfig, SessionSnapshot } from "./session";
+export { createSession, forkSession, loadSession, prompt, resumeSession, Session } from "./session";
+export type {
+	SessionConfig,
+	SessionSnapshot,
+	SessionStateChangeEvent,
+	SessionStateChangeListener,
+	SessionStore,
+} from "./session";
+
+export { MemorySessionStore } from "./memory-store";
 
 export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";
+
+export { McpClient } from "./mcp-client";
+export type { McpClientConfig, McpToolDefinition } from "./mcp-client";
 
 export { isHostedTool, isFunctionTool } from "./hosted-tool";
 export type { HostedTool, AgentTool } from "./hosted-tool";
