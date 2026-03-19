@@ -55,6 +55,49 @@ import type {
 
 const DEFAULT_MAX_TURNS = 10;
 
+/**
+ * A simple async channel for pushing events from callbacks and pulling them
+ * from an async generator. Used to relay subagent stream events through the
+ * parent stream in real time.
+ */
+function createStreamEventChannel(): {
+	push: (event: StreamEvent) => void;
+	done: () => void;
+	[Symbol.asyncIterator]: () => AsyncIterableIterator<StreamEvent>;
+} {
+	const queue: StreamEvent[] = [];
+	let resolve: (() => void) | undefined;
+	let finished = false;
+
+	return {
+		push(event: StreamEvent) {
+			queue.push(event);
+			resolve?.();
+			resolve = undefined;
+		},
+		done() {
+			finished = true;
+			resolve?.();
+			resolve = undefined;
+		},
+		[Symbol.asyncIterator]() {
+			return {
+				async next(): Promise<IteratorResult<StreamEvent>> {
+					while (queue.length === 0 && !finished) {
+						await new Promise<void>((r) => {
+							resolve = r;
+						});
+					}
+					if (queue.length > 0) {
+						return { value: queue.shift()!, done: false };
+					}
+					return { value: undefined as any, done: true };
+				},
+			};
+		},
+	};
+}
+
 export interface ToolApproval {
 	toolCallId: string;
 	decision: "approve" | "deny";
@@ -846,7 +889,9 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				return;
 			}
 
-			const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
+			// Use a channel to relay subagent stream events in real time
+			const channel = createStreamEventChannel();
+			const toolExecPromise = executeToolCallsWithHandoffs(
 				currentAgent,
 				ctx,
 				finalResponse.toolCalls,
@@ -856,7 +901,17 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				runHooks,
 				toolInputGuardrails,
 				toolOutputGuardrails,
-			);
+				(event) => channel.push(event),
+			).then((result) => {
+				channel.done();
+				return result;
+			});
+
+			for await (const event of channel) {
+				yield event;
+			}
+
+			const { toolMessages, handoffAgent } = await toolExecPromise;
 			messages.push(...toolMessages);
 
 			// Check toolUseBehavior
@@ -1138,6 +1193,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 	runHooks?: RunHooks<TContext>,
 	toolInputGuardrails?: ToolInputGuardrail<TContext>[],
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[],
+	onStreamEvent?: (event: StreamEvent) => void,
 ): Promise<{ toolMessages: ToolMessage[]; handoffAgent?: Agent<TContext, any> }> {
 	let handoffAgent: Agent<TContext, any> | undefined;
 
@@ -1201,18 +1257,19 @@ async function executeToolCallsWithHandoffs<TContext>(
 						await runHooks.onToolStart({ agent, toolName: tcName, context: ctx.context });
 					}
 
+					const toolOpts = { signal, onStreamEvent };
 					let result: string;
 					if (trace) {
 						const span = trace.startSpan(`subagent:${matchedSubagent.agent.name}`, "subagent", {
 							toolName: tcName,
 						});
 						try {
-							result = await saTool.execute(ctx.context, params, { signal });
+							result = await saTool.execute(ctx.context, params, toolOpts);
 						} finally {
 							trace.endSpan(span);
 						}
 					} else {
-						result = await saTool.execute(ctx.context, params, { signal });
+						result = await saTool.execute(ctx.context, params, toolOpts);
 					}
 
 					// Fire onSubagentStop

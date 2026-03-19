@@ -4,6 +4,7 @@ import { zodToJsonSchema } from "./utils/zod";
 
 export interface ToolExecuteOptions {
 	signal?: AbortSignal;
+	onStreamEvent?: (event: import("./model").StreamEvent) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

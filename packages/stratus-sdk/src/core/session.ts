@@ -17,6 +17,18 @@ import type { CallModelInputFilter, ToolErrorFormatter } from "./run";
 import type { SubAgent } from "./subagent";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 
+/** Pluggable persistence backend for session state. */
+export interface SessionStore {
+	/** Save a session snapshot. */
+	save(sessionId: string, snapshot: SessionSnapshot): Promise<void>;
+	/** Load a session snapshot. Returns undefined if not found. */
+	load(sessionId: string): Promise<SessionSnapshot | undefined>;
+	/** Delete a session. */
+	delete(sessionId: string): Promise<void>;
+	/** List all session IDs. */
+	list?(): Promise<string[]>;
+}
+
 export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	model: Model;
 	instructions?: Instructions<TContext>;
@@ -39,6 +51,10 @@ export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	toolInputGuardrails?: ToolInputGuardrail<TContext>[];
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
 	resetToolChoice?: boolean;
+	/** Optional persistence backend. When set, sessions auto-save after each interaction. */
+	store?: SessionStore;
+	/** Session ID for persistence. Auto-generated if not provided. */
+	sessionId?: string;
 }
 
 export interface SessionSnapshot {
@@ -61,6 +77,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _toolInputGuardrails: ToolInputGuardrail<TContext>[];
 	private readonly _toolOutputGuardrails: ToolOutputGuardrail<TContext>[];
 	private readonly _resetToolChoice: boolean | undefined;
+	private readonly _store: SessionStore | undefined;
 	private _messages: ChatMessage[] = [];
 	private _resultPromise: Promise<RunResult<TOutput>> | null = null;
 	private _streaming = false;
@@ -71,7 +88,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		config: SessionConfig<TContext, TOutput>,
 		restore?: { id?: string; messages?: ChatMessage[] },
 	) {
-		this.id = restore?.id ?? crypto.randomUUID();
+		this.id = restore?.id ?? config.sessionId ?? crypto.randomUUID();
 		this._context = config.context;
 		this._maxTurns = config.maxTurns;
 		this._costEstimator = config.costEstimator;
@@ -83,6 +100,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this._toolInputGuardrails = config.toolInputGuardrails ?? [];
 		this._toolOutputGuardrails = config.toolOutputGuardrails ?? [];
 		this._resetToolChoice = config.resetToolChoice;
+		this._store = config.store;
 		this._agent = new Agent<TContext, TOutput>({
 			name: "session_agent",
 			model: config.model,
@@ -190,6 +208,10 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		} finally {
 			this._streaming = false;
 
+			if (this._store && !this._closed) {
+				await this._store.save(this.id, this.save());
+			}
+
 			// Fire onSessionEnd in finally
 			if (this._hooks?.onSessionEnd) {
 				await this._hooks.onSessionEnd({ context: this._context as TContext });
@@ -221,6 +243,16 @@ export function forkSession<TContext = unknown, TOutput = undefined>(
 	return new Session(config, {
 		messages: structuredClone(snapshot.messages),
 	});
+}
+
+export async function loadSession<TContext = unknown, TOutput = undefined>(
+	store: SessionStore,
+	sessionId: string,
+	config: SessionConfig<TContext, TOutput>,
+): Promise<Session<TContext, TOutput> | undefined> {
+	const snapshot = await store.load(sessionId);
+	if (!snapshot) return undefined;
+	return resumeSession(snapshot, { ...config, store });
 }
 
 export async function prompt<TContext = unknown, TOutput = undefined>(

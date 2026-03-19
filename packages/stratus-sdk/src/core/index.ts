@@ -15,8 +15,10 @@ export type {
 	MaxTurnsErrorHandler,
 } from "./run";
 
-export { createSession, forkSession, prompt, resumeSession, Session } from "./session";
-export type { SessionConfig, SessionSnapshot } from "./session";
+export { createSession, forkSession, loadSession, prompt, resumeSession, Session } from "./session";
+export type { SessionConfig, SessionSnapshot, SessionStore } from "./session";
+
+export { MemorySessionStore } from "./memory-store";
 
 export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";

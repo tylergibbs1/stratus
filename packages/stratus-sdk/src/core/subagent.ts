@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Agent } from "./agent";
 import type { Model } from "./model";
-import { run } from "./run";
+import { stream, run } from "./run";
 import type { FunctionTool, ToolExecuteOptions } from "./tool";
 import type { ToolDefinition } from "./types";
 import { zodToJsonSchema } from "./utils/zod";
@@ -70,8 +70,34 @@ export function subagentToTool<TParent>(sa: SubAgent<TParent>): FunctionTool<any
 			const childInput = sa.mapInput(params);
 			const childContext = sa.mapContext ? sa.mapContext(parentContext) : undefined;
 			const model = sa.model ?? sa.agent.model;
+			const agentName = sa.agent.name;
 
 			try {
+				if (options?.onStreamEvent) {
+					const emit = options.onStreamEvent;
+					emit({ type: "subagent_start", agentName });
+
+					const { stream: childStream, result: resultPromise } = stream(sa.agent, childInput, {
+						context: childContext,
+						model,
+						maxTurns: sa.maxTurns,
+						signal: options?.signal,
+					});
+
+					// Prevent unhandled rejection if the stream throws before we await resultPromise
+					resultPromise.catch(() => {});
+
+					for await (const event of childStream) {
+						if (event.type === "content_delta") {
+							emit({ type: "subagent_delta", agentName, content: event.content });
+						}
+					}
+
+					const result = await resultPromise;
+					emit({ type: "subagent_end", agentName, result: result.output });
+					return result.output;
+				}
+
 				const result = await run(sa.agent, childInput, {
 					context: childContext,
 					model,
@@ -79,12 +105,12 @@ export function subagentToTool<TParent>(sa: SubAgent<TParent>): FunctionTool<any
 					signal: options?.signal,
 				});
 				if (result.interrupted) {
-					return `Sub-agent "${sa.agent.name}" was interrupted waiting for tool approval`;
+					return `Sub-agent "${agentName}" was interrupted waiting for tool approval`;
 				}
 				return result.output;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				return `Error in sub-agent "${sa.agent.name}": ${message}`;
+				return `Error in sub-agent "${agentName}": ${message}`;
 			}
 		},
 	};
