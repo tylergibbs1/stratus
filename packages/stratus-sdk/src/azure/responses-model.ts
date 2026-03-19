@@ -18,6 +18,7 @@ import type {
 	ToolDefinition,
 } from "../core/types";
 import { resolveResponsesUrl } from "./endpoint";
+import { computeRetryDelay } from "./retry";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureResponsesModelConfig {
@@ -27,6 +28,8 @@ export interface AzureResponsesModelConfig {
 	deployment: string;
 	apiVersion?: string;
 	store?: boolean;
+	/** Maximum number of retries on 429 / network errors (default 3). */
+	maxRetries?: number;
 }
 
 const DEFAULT_API_VERSION = "2025-04-01-preview";
@@ -71,6 +74,7 @@ export class AzureResponsesModel implements Model {
 	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
 	private readonly store: boolean;
+	private readonly maxRetries: number;
 
 	constructor(config: AzureResponsesModelConfig) {
 		if (config.apiKey && config.azureAdTokenProvider) {
@@ -83,6 +87,7 @@ export class AzureResponsesModel implements Model {
 		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
 		this.store = config.store ?? false;
+		this.maxRetries = config.maxRetries ?? 3;
 		this.url = resolveResponsesUrl(config.endpoint, config.apiVersion ?? DEFAULT_API_VERSION);
 	}
 
@@ -106,9 +111,7 @@ export class AzureResponsesModel implements Model {
 		options?: ModelRequestOptions,
 	): AsyncGenerator<StreamEvent> {
 		const body = this.buildRequestBody(request, true);
-		const maxSseRetries = 3;
-
-		for (let sseAttempt = 0; sseAttempt <= maxSseRetries; sseAttempt++) {
+		for (let sseAttempt = 0; sseAttempt <= this.maxRetries; sseAttempt++) {
 			const response = await this.doFetch(body, options?.signal);
 
 			if (!response.body) {
@@ -241,7 +244,7 @@ export class AzureResponsesModel implements Model {
 						const errorType = err?.type ?? "unknown";
 						const errorMsg = err?.message ?? "Unknown error";
 						if (errorType === "too_many_requests") {
-							if (!hasYielded && sseAttempt < maxSseRetries) {
+							if (!hasYielded && sseAttempt < this.maxRetries) {
 								sseRateLimited = true;
 								break; // exit SSE loop, retry in outer loop
 							}
@@ -256,10 +259,10 @@ export class AzureResponsesModel implements Model {
 
 			// SSE rate limited before any events were yielded — retry with backoff
 			if (sseRateLimited) {
-				const retryAfterHeader = response.headers.get("retry-after");
-				const waitMs = retryAfterHeader
-					? Number.parseInt(retryAfterHeader, 10) * 1000
-					: Math.min(10000 * 2 ** sseAttempt, 60000);
+				const waitMs = computeRetryDelay(response.headers, sseAttempt);
+				console.warn(
+					`[AzureResponsesModel] 429 rate limited (SSE), retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${sseAttempt + 1}/${this.maxRetries})`,
+				);
 				await new Promise((r) => setTimeout(r, waitMs));
 				continue;
 			}
@@ -358,9 +361,8 @@ export class AzureResponsesModel implements Model {
 	}
 
 	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-		const maxRetries = 3;
 		let lastError: unknown;
-		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
 			let response: Response;
 			try {
 				const authHeaders = await this.getAuthHeaders();
@@ -378,22 +380,22 @@ export class AzureResponsesModel implements Model {
 				// are retryable unless the caller aborted.
 				if (signal?.aborted) throw fetchErr;
 				lastError = fetchErr;
-				if (attempt < maxRetries) {
-					const waitMs = Math.min(5000 * 2 ** attempt, 30000);
+				if (attempt < this.maxRetries) {
+					const waitMs = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 30000);
 					await new Promise((r) => setTimeout(r, waitMs));
 					continue;
 				}
 				throw new ModelError(
-					`Azure API network error after ${maxRetries + 1} attempts: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+					`Azure API network error after ${this.maxRetries + 1} attempts: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
 					{ cause: fetchErr },
 				);
 			}
 
-			if (response.status === 429 && attempt < maxRetries) {
-				const retryAfter = response.headers.get("retry-after");
-				const waitMs = retryAfter
-					? Number.parseInt(retryAfter, 10) * 1000
-					: Math.min(5000 * 2 ** attempt, 30000);
+			if (response.status === 429 && attempt < this.maxRetries) {
+				const waitMs = computeRetryDelay(response.headers, attempt);
+				console.warn(
+					`[AzureResponsesModel] 429 rate limited, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
+				);
 				await new Promise((r) => setTimeout(r, waitMs));
 				continue;
 			}
