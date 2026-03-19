@@ -126,6 +126,7 @@ export class McpClient {
 			name: mcpTool.name,
 			description: mcpTool.description ?? "",
 			parameters: z.record(z.string(), z.unknown()),
+			_rawJsonSchema: mcpTool.inputSchema,
 			execute: async (_context: TContext, params: Record<string, unknown>) => {
 				return this.callTool(mcpTool.name, params);
 			},
@@ -137,6 +138,9 @@ export class McpClient {
 		if (this.process) {
 			this.process.kill();
 			this.process = null;
+		}
+		for (const { reject } of this.pendingRequests.values()) {
+			reject(new Error("MCP client disconnected"));
 		}
 		this.pendingRequests.clear();
 		this.buffer = "";

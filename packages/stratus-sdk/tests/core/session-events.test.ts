@@ -137,11 +137,11 @@ describe("session state change events", () => {
 			expect(savedEvents[0]!.sessionId).toBe(session.id);
 		}
 
-		// saved should come after stream_end
+		// saved should come before stream_end (persist completes before signaling end)
 		const types = events.map((e) => e.type);
 		const endIdx = types.indexOf("stream_end");
 		const savedIdx = types.indexOf("saved");
-		expect(endIdx).toBeLessThan(savedIdx);
+		expect(savedIdx).toBeLessThan(endIdx);
 	});
 
 	test("session without onStateChange works normally", async () => {
@@ -194,11 +194,15 @@ describe("session state change events", () => {
 
 		const types = events.map((e) => e.type);
 
-		// Expected order: message_added (user), stream_start, message_added (assistant), stream_end, saved
+		// Expected order: message_added (user), stream_start, message_added (assistant), saved, stream_end
 		expect(types[0]).toBe("message_added"); // user message from send()
 		expect(types[1]).toBe("stream_start");
 		// message_added events for new messages come during result resolution
 		expect(types).toContain("stream_end");
-		expect(types[types.length - 1]).toBe("saved");
+		expect(types[types.length - 1]).toBe("stream_end");
+		// saved comes before stream_end (persist completes before signaling end)
+		const savedIdx = types.indexOf("saved");
+		const endIdx = types.indexOf("stream_end");
+		expect(savedIdx).toBeLessThan(endIdx);
 	});
 });

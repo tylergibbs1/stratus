@@ -35,6 +35,8 @@ export interface FunctionTool<TParams = any, TContext = any> {
 		/** Predicate to decide if the error is retryable. Defaults to retrying all errors. */
 		shouldRetry?: (error: unknown) => boolean;
 	};
+	/** Raw JSON Schema override. When set, toolToDefinition uses this instead of zodToJsonSchema. Used by McpClient. */
+	_rawJsonSchema?: Record<string, unknown>;
 }
 
 export function tool<TParams, TContext = unknown>(config: {
@@ -70,7 +72,7 @@ export function toolToDefinition(t: FunctionTool): ToolDefinition {
 		function: {
 			name: t.name,
 			description: t.description,
-			parameters: zodToJsonSchema(t.parameters),
+			parameters: t._rawJsonSchema ?? zodToJsonSchema(t.parameters),
 		},
 	};
 }

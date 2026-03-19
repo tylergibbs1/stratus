@@ -1500,7 +1500,10 @@ export async function resumeRun<TContext, TOutput = undefined>(
 	const approvalMap = new Map(approvals.map((a) => [a.toolCallId, a]));
 	const pendingIds = new Set(interrupted.pendingToolCalls.map((p) => p.toolCallId));
 	const functionTools = agent.tools.filter(isFunctionTool);
-	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
+	const subagentTools = (interrupted.currentAgent.subagents ?? []).map(subagentToTool);
+	const toolsByName = new Map(
+		[...functionTools, ...subagentTools].map((t) => [t.name, t]),
+	);
 
 	const model = options?.model ?? agent.model;
 	if (!model) {
@@ -1555,7 +1558,7 @@ export async function resumeRun<TContext, TOutput = undefined>(
 					toolMessages.push({
 						role: "tool",
 						tool_call_id: tc.id,
-						content: formatToolError(tc.function.name, error),
+						content: formatToolError(tc.function.name, error, options?.toolErrorFormatter),
 					});
 				}
 			}
@@ -1586,7 +1589,7 @@ export async function resumeRun<TContext, TOutput = undefined>(
 				toolMessages.push({
 					role: "tool",
 					tool_call_id: tc.id,
-					content: formatToolError(tc.function.name, error),
+					content: formatToolError(tc.function.name, error, options?.toolErrorFormatter),
 				});
 			}
 		}

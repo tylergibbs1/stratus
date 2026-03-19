@@ -191,6 +191,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			}
 		}
 
+		let streamError = false;
 		try {
 			const { stream: s, result: resultPromise } = coreStream(this._agent, [...this._messages], {
 				context: this._context,
@@ -227,14 +228,18 @@ export class Session<TContext = unknown, TOutput = undefined> {
 			}
 
 			await this._resultPromise;
+		} catch (err) {
+			streamError = true;
+			throw err;
 		} finally {
 			this._streaming = false;
-			this._onStateChange?.({ type: "stream_end" });
 
-			if (this._store && !this._closed) {
+			if (!streamError && this._store && !this._closed) {
 				await this._store.save(this.id, this.save());
 				this._onStateChange?.({ type: "saved", sessionId: this.id });
 			}
+
+			this._onStateChange?.({ type: "stream_end" });
 
 			// Fire onSessionEnd in finally
 			if (this._hooks?.onSessionEnd) {
