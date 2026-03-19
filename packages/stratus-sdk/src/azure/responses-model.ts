@@ -103,7 +103,16 @@ export class AzureResponsesModel implements Model {
 	async getResponse(request: ModelRequest, options?: ModelRequestOptions): Promise<ModelResponse> {
 		const body = this.buildRequestBody(request, false);
 		const response = await this.doFetch(body, options?.signal);
-		const json = await response.json();
+		let json: ResponsesApiResponse;
+		try {
+			json = await response.json();
+		} catch (err) {
+			const text = await response.text().catch(() => "");
+			throw new ModelError(`Azure API returned non-JSON response: ${text.slice(0, 200)}`, {
+				status: response.status,
+				cause: err,
+			});
+		}
 		return this.parseResponse(json);
 	}
 
@@ -406,13 +415,37 @@ export class AzureResponsesModel implements Model {
 				);
 				await abortableSleep(waitMs, signal);
 				if (signal?.aborted) {
-					throw new ModelError("Azure API request aborted during retry backoff", { status: response.status });
+					throw new ModelError("Azure API request aborted during retry backoff", {
+						status: response.status,
+					});
 				}
 				continue;
 			}
 
 			if (!response.ok) {
 				await this.handleErrorResponse(response);
+			}
+
+			// Detect proxy errors masquerading as 200 OK (HTML body instead of JSON/SSE).
+			// Only trigger when a content-type IS present but wrong — missing headers are normal.
+			const contentType = response.headers.get("content-type");
+			if (contentType && !contentType.includes("json") && !contentType.includes("event-stream")) {
+				if (attempt < this.maxRetries) {
+					const waitMs = computeRetryDelay(response.headers, attempt);
+					console.warn(
+						`[AzureResponsesModel] 200 with unexpected content-type "${contentType}", retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
+					);
+					await abortableSleep(waitMs, signal);
+					if (signal?.aborted) {
+						throw new ModelError("Azure API request aborted during retry backoff", { status: 200 });
+					}
+					continue;
+				}
+				const text = await response.text().catch(() => "");
+				throw new ModelError(
+					`Azure API returned non-JSON response (content-type: ${contentType}): ${text.slice(0, 200)}`,
+					{ status: 200 },
+				);
 			}
 
 			return response;
