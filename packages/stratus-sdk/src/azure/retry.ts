@@ -1,5 +1,13 @@
 const MAX_RETRY_DELAY_MS = 30_000;
 
+/** Status codes that are safe to retry — transient Azure errors. */
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503]);
+
+/** Returns true if the HTTP status code is a transient error worth retrying. */
+export function isRetryableStatus(status: number): boolean {
+	return RETRYABLE_STATUS_CODES.has(status);
+}
+
 /**
  * Computes how long to wait before retrying a 429'd request.
  *

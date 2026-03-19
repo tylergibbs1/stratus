@@ -10,7 +10,7 @@ import type {
 } from "../core/model";
 import type { ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition } from "../core/types";
 import { resolveChatCompletionsUrl } from "./endpoint";
-import { abortableSleep, computeRetryDelay } from "./retry";
+import { abortableSleep, computeRetryDelay, isRetryableStatus } from "./retry";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureChatCompletionsModelConfig {
@@ -238,14 +238,14 @@ export class AzureChatCompletionsModel implements Model {
 				);
 			}
 
-			if (response.status === 429 && attempt < this.maxRetries) {
+			if (isRetryableStatus(response.status) && attempt < this.maxRetries) {
 				const waitMs = computeRetryDelay(response.headers, attempt);
 				console.warn(
-					`[AzureChatCompletionsModel] 429 rate limited, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
+					`[AzureChatCompletionsModel] ${response.status} retryable error, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
 				);
 				await abortableSleep(waitMs, signal);
 				if (signal?.aborted) {
-					throw new ModelError("Azure API request aborted during retry backoff", { status: 429 });
+					throw new ModelError("Azure API request aborted during retry backoff", { status: response.status });
 				}
 				continue;
 			}

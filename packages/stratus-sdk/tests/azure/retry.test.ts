@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { abortableSleep, computeRetryDelay } from "../../src/azure/retry";
+import { abortableSleep, computeRetryDelay, isRetryableStatus } from "../../src/azure/retry";
 
 describe("computeRetryDelay", () => {
 	test("prefers retry-after-ms header", () => {
@@ -82,5 +82,23 @@ describe("abortableSleep", () => {
 		setTimeout(() => controller.abort(), 30);
 		await abortableSleep(5000, controller.signal);
 		expect(Date.now() - start).toBeLessThan(200);
+	});
+});
+
+describe("isRetryableStatus", () => {
+	test("returns true for transient error codes", () => {
+		expect(isRetryableStatus(429)).toBe(true);
+		expect(isRetryableStatus(500)).toBe(true);
+		expect(isRetryableStatus(502)).toBe(true);
+		expect(isRetryableStatus(503)).toBe(true);
+	});
+
+	test("returns false for non-retryable codes", () => {
+		expect(isRetryableStatus(200)).toBe(false);
+		expect(isRetryableStatus(400)).toBe(false);
+		expect(isRetryableStatus(401)).toBe(false);
+		expect(isRetryableStatus(403)).toBe(false);
+		expect(isRetryableStatus(404)).toBe(false);
+		expect(isRetryableStatus(501)).toBe(false);
 	});
 });

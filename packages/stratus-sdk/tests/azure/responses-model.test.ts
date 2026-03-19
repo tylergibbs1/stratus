@@ -161,8 +161,8 @@ describe("AzureResponsesModel", () => {
 	test("getResponse throws ModelError on HTTP error", async () => {
 		mockFetch({
 			ok: false,
-			status: 500,
-			statusText: "Internal Server Error",
+			status: 422,
+			statusText: "Unprocessable Entity",
 			text: "Something went wrong",
 		});
 

@@ -117,12 +117,13 @@ describe("AzureChatCompletionsModel error handling", () => {
 		}
 	});
 
-	test("503 throws ModelError", async () => {
+	test("503 exhausts retries and throws ModelError", async () => {
 		mockFetch({
 			ok: false,
 			status: 503,
 			statusText: "Service Unavailable",
 			text: "",
+			headers: new Headers({ "retry-after-ms": "1" }),
 		});
 
 		const model = new AzureChatCompletionsModel(chatConfig);
