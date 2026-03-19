@@ -32,6 +32,7 @@ export function webSearchTool(config?: WebSearchToolConfig): HostedTool {
 export interface CodeInterpreterToolConfig {
 	container?: {
 		type: "auto" | string;
+		file_ids?: string[];
 	};
 }
 

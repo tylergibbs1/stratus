@@ -13,7 +13,18 @@ export interface ImageContentPart {
 	image_url: { url: string; detail?: "auto" | "low" | "high" };
 }
 
-export type ContentPart = TextContentPart | ImageContentPart;
+export interface FileContentPart {
+	type: "file";
+	file: { url: string } | { file_id: string };
+	filename?: string;
+}
+
+export interface AudioContentPart {
+	type: "audio";
+	audio: { url: string } | { data: string; format: "wav" | "mp3" };
+}
+
+export type ContentPart = TextContentPart | ImageContentPart | FileContentPart | AudioContentPart;
 
 export interface UserMessage {
 	role: "user";

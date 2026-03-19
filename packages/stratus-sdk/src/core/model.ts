@@ -32,6 +32,8 @@ export interface ModelResponse {
 	usage?: UsageInfo;
 	finishReason?: FinishReason;
 	responseId?: string;
+	incompleteDetails?: { reason?: string };
+	outputItems?: Record<string, unknown>[];
 }
 
 export type StreamEvent =
