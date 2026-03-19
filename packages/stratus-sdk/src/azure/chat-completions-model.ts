@@ -10,7 +10,7 @@ import type {
 } from "../core/model";
 import type { ChatMessage, HostedToolDefinition, ToolCall, ToolDefinition } from "../core/types";
 import { resolveChatCompletionsUrl } from "./endpoint";
-import { computeRetryDelay } from "./retry";
+import { abortableSleep, computeRetryDelay } from "./retry";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureChatCompletionsModelConfig {
@@ -210,7 +210,6 @@ export class AzureChatCompletionsModel implements Model {
 	}
 
 	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-		let lastError: unknown;
 		for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
 			let response: Response;
 			try {
@@ -226,10 +225,10 @@ export class AzureChatCompletionsModel implements Model {
 				});
 			} catch (fetchErr) {
 				if (signal?.aborted) throw fetchErr;
-				lastError = fetchErr;
 				if (attempt < this.maxRetries) {
 					const waitMs = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 30000);
-					await new Promise((r) => setTimeout(r, waitMs));
+					await abortableSleep(waitMs, signal);
+					if (signal?.aborted) throw fetchErr;
 					continue;
 				}
 				throw new ModelError(
@@ -243,7 +242,10 @@ export class AzureChatCompletionsModel implements Model {
 				console.warn(
 					`[AzureChatCompletionsModel] 429 rate limited, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
 				);
-				await new Promise((r) => setTimeout(r, waitMs));
+				await abortableSleep(waitMs, signal);
+				if (signal?.aborted) {
+					throw new ModelError("Azure API request aborted during retry backoff", { status: 429 });
+				}
 				continue;
 			}
 
@@ -254,9 +256,9 @@ export class AzureChatCompletionsModel implements Model {
 			return response;
 		}
 
-		throw new ModelError(
-			`Max retries exceeded for Azure API request${lastError instanceof Error ? `: ${lastError.message}` : ""}`,
-		);
+		// Unreachable: the final iteration always returns or throws above.
+		// Kept for TypeScript's control-flow analysis.
+		throw new ModelError("Max retries exceeded for Azure API request");
 	}
 
 	private async handleErrorResponse(response: Response): Promise<never> {

@@ -18,7 +18,7 @@ import type {
 	ToolDefinition,
 } from "../core/types";
 import { resolveResponsesUrl } from "./endpoint";
-import { computeRetryDelay } from "./retry";
+import { abortableSleep, computeRetryDelay } from "./retry";
 import { parseSSE } from "./sse-parser";
 
 export interface AzureResponsesModelConfig {
@@ -111,7 +111,10 @@ export class AzureResponsesModel implements Model {
 		options?: ModelRequestOptions,
 	): AsyncGenerator<StreamEvent> {
 		const body = this.buildRequestBody(request, true);
-		for (let sseAttempt = 0; sseAttempt <= this.maxRetries; sseAttempt++) {
+		// SSE-level retries are separate from doFetch's HTTP-level retries.
+		// Use a fixed budget of 3 to avoid quadratic retry multiplication.
+		const maxSseRetries = 3;
+		for (let sseAttempt = 0; sseAttempt <= maxSseRetries; sseAttempt++) {
 			const response = await this.doFetch(body, options?.signal);
 
 			if (!response.body) {
@@ -244,7 +247,7 @@ export class AzureResponsesModel implements Model {
 						const errorType = err?.type ?? "unknown";
 						const errorMsg = err?.message ?? "Unknown error";
 						if (errorType === "too_many_requests") {
-							if (!hasYielded && sseAttempt < this.maxRetries) {
+							if (!hasYielded && sseAttempt < maxSseRetries) {
 								sseRateLimited = true;
 								break; // exit SSE loop, retry in outer loop
 							}
@@ -261,9 +264,14 @@ export class AzureResponsesModel implements Model {
 			if (sseRateLimited) {
 				const waitMs = computeRetryDelay(response.headers, sseAttempt);
 				console.warn(
-					`[AzureResponsesModel] 429 rate limited (SSE), retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${sseAttempt + 1}/${this.maxRetries})`,
+					`[AzureResponsesModel] 429 rate limited (SSE), retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${sseAttempt + 1}/${maxSseRetries})`,
 				);
-				await new Promise((r) => setTimeout(r, waitMs));
+				await abortableSleep(waitMs, options?.signal);
+				if (options?.signal?.aborted) {
+					throw new ModelError("Azure API request aborted during SSE retry backoff", {
+						status: 429,
+					});
+				}
 				continue;
 			}
 
@@ -361,7 +369,6 @@ export class AzureResponsesModel implements Model {
 	}
 
 	private async doFetch(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-		let lastError: unknown;
 		for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
 			let response: Response;
 			try {
@@ -379,10 +386,10 @@ export class AzureResponsesModel implements Model {
 				// Network errors (timeout, connection reset, DNS failure)
 				// are retryable unless the caller aborted.
 				if (signal?.aborted) throw fetchErr;
-				lastError = fetchErr;
 				if (attempt < this.maxRetries) {
 					const waitMs = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 30000);
-					await new Promise((r) => setTimeout(r, waitMs));
+					await abortableSleep(waitMs, signal);
+					if (signal?.aborted) throw fetchErr;
 					continue;
 				}
 				throw new ModelError(
@@ -396,7 +403,10 @@ export class AzureResponsesModel implements Model {
 				console.warn(
 					`[AzureResponsesModel] 429 rate limited, retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${this.maxRetries})`,
 				);
-				await new Promise((r) => setTimeout(r, waitMs));
+				await abortableSleep(waitMs, signal);
+				if (signal?.aborted) {
+					throw new ModelError("Azure API request aborted during retry backoff", { status: 429 });
+				}
 				continue;
 			}
 
@@ -407,9 +417,9 @@ export class AzureResponsesModel implements Model {
 			return response;
 		}
 
-		throw new ModelError(
-			`Max retries exceeded for Azure API request${lastError instanceof Error ? `: ${lastError.message}` : ""}`,
-		);
+		// Unreachable: the final iteration always returns or throws above.
+		// Kept for TypeScript's control-flow analysis.
+		throw new ModelError("Max retries exceeded for Azure API request");
 	}
 
 	private async handleErrorResponse(response: Response): Promise<never> {
