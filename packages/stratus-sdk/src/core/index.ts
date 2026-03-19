@@ -16,12 +16,21 @@ export type {
 } from "./run";
 
 export { createSession, forkSession, loadSession, prompt, resumeSession, Session } from "./session";
-export type { SessionConfig, SessionSnapshot, SessionStore } from "./session";
+export type {
+	SessionConfig,
+	SessionSnapshot,
+	SessionStateChangeEvent,
+	SessionStateChangeListener,
+	SessionStore,
+} from "./session";
 
 export { MemorySessionStore } from "./memory-store";
 
 export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";
+
+export { McpClient } from "./mcp-client";
+export type { McpClientConfig, McpToolDefinition } from "./mcp-client";
 
 export { isHostedTool, isFunctionTool } from "./hosted-tool";
 export type { HostedTool, AgentTool } from "./hosted-tool";

@@ -289,6 +289,8 @@ export interface RunOptions<TContext, TOutput = undefined> {
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
 	/** Reset tool_choice to "auto" after the first LLM call to prevent infinite loops */
 	resetToolChoice?: boolean;
+	/** Additional subagents available at runtime beyond those defined on the agent */
+	dynamicSubagents?: SubAgent<TContext>[];
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -349,6 +351,7 @@ export async function run<TContext, TOutput = undefined>(
 	const callModelInputFilter = options?.callModelInputFilter;
 	const toolInputGuardrails = options?.toolInputGuardrails ?? [];
 	const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
+	const dynamicSubagents = options?.dynamicSubagents;
 
 	// Fire beforeRun hook on the entry agent
 	const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -405,7 +408,7 @@ export async function run<TContext, TOutput = undefined>(
 	for (let turn = 0; turn < maxTurns; turn++) {
 		checkAborted(signal);
 
-		const toolDefs = await buildToolDefs(currentAgent, ctx.context);
+		const toolDefs = await buildToolDefs(currentAgent, ctx.context, dynamicSubagents);
 		let request: ModelRequest = {
 			messages,
 			tools: toolDefs.length > 0 ? toolDefs : undefined,
@@ -539,6 +542,8 @@ export async function run<TContext, TOutput = undefined>(
 			runHooks,
 			toolInputGuardrails,
 			toolOutputGuardrails,
+			undefined,
+			dynamicSubagents,
 		);
 		messages.push(...toolMessages);
 
@@ -719,6 +724,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		const callModelInputFilter = options?.callModelInputFilter;
 		const toolInputGuardrails = options?.toolInputGuardrails ?? [];
 		const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
+		const dynamicSubagents = options?.dynamicSubagents;
 
 		// Fire beforeRun hook on the entry agent
 		const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -775,7 +781,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		for (let turn = 0; turn < maxTurns; turn++) {
 			checkAborted(signal);
 
-			const toolDefs = await buildToolDefs(currentAgent, ctx.context);
+			const toolDefs = await buildToolDefs(currentAgent, ctx.context, dynamicSubagents);
 			let request: ModelRequest = {
 				messages,
 				tools: toolDefs.length > 0 ? toolDefs : undefined,
@@ -902,6 +908,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				toolInputGuardrails,
 				toolOutputGuardrails,
 				(event) => channel.push(event),
+				dynamicSubagents,
 			).then((result) => {
 				channel.done();
 				return result;
@@ -1107,6 +1114,7 @@ async function buildFinalResult<TContext, TOutput>(
 async function buildToolDefs(
 	agent: Agent<any, any>,
 	context: any,
+	extraSubagents?: SubAgent[],
 ): Promise<(ToolDefinition | HostedToolDefinition)[]> {
 	const defs: (ToolDefinition | HostedToolDefinition)[] = [];
 
@@ -1119,7 +1127,8 @@ async function buildToolDefs(
 			defs.push(toolToDefinition(t));
 		}
 	}
-	for (const sa of agent.subagents) {
+	const allSubagents = [...agent.subagents, ...(extraSubagents ?? [])];
+	for (const sa of allSubagents) {
 		defs.push(subagentToDefinition(sa));
 	}
 	for (const h of agent.handoffs) {
@@ -1194,12 +1203,14 @@ async function executeToolCallsWithHandoffs<TContext>(
 	toolInputGuardrails?: ToolInputGuardrail<TContext>[],
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[],
 	onStreamEvent?: (event: StreamEvent) => void,
+	extraSubagents?: SubAgent<TContext>[],
 ): Promise<{ toolMessages: ToolMessage[]; handoffAgent?: Agent<TContext, any> }> {
 	let handoffAgent: Agent<TContext, any> | undefined;
 
 	// Build O(1) lookup maps
 	const handoffsByName = new Map(agent.handoffs.map((h) => [h.toolName, h]));
-	const subagentsByName = new Map(agent.subagents.map((sa) => [sa.toolName, sa]));
+	const allSubagents = [...agent.subagents, ...(extraSubagents ?? [])];
+	const subagentsByName = new Map(allSubagents.map((sa) => [sa.toolName, sa]));
 	const functionTools = agent.tools.filter(isFunctionTool);
 	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
 
