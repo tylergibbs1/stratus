@@ -55,7 +55,8 @@ export class AzureChatCompletionsModel implements Model {
 			const token = await this.tokenProvider();
 			return { Authorization: `Bearer ${token}` };
 		}
-		return { "api-key": this.apiKey! };
+		// Constructor validates exactly one of apiKey/tokenProvider is set.
+		return { "api-key": this.apiKey as string };
 	}
 
 	async getResponse(request: ModelRequest, options?: ModelRequestOptions): Promise<ModelResponse> {
