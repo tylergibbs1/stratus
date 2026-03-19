@@ -2,13 +2,14 @@ export { Agent } from "./agent";
 export type { AgentConfig, HandoffInput, Instructions } from "./agent";
 
 export { RunContext } from "./context";
-export { RunResult } from "./result";
-export type { RunResultOptions } from "./result";
-export { run, stream } from "./run";
+export { InterruptedRunResult, RunResult } from "./result";
+export type { PendingToolCall, RunResultOptions } from "./result";
+export { resumeRun, run, stream } from "./run";
 export type {
 	RunOptions,
 	StreamOptions,
 	StreamedRunResult,
+	ToolApproval,
 	ToolErrorFormatter,
 	CallModelInputFilter,
 	MaxTurnsErrorHandler,

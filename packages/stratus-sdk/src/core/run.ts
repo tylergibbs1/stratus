@@ -36,10 +36,12 @@ import type {
 	StreamEvent,
 	UsageInfo,
 } from "./model";
-import { RunResult } from "./result";
+import { InterruptedRunResult, RunResult } from "./result";
+import type { PendingToolCall } from "./result";
 import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { SubAgent } from "./subagent";
 import { toolToDefinition } from "./tool";
+import type { FunctionTool } from "./tool";
 
 import { getCurrentTrace } from "./tracing";
 import type {
@@ -52,6 +54,13 @@ import type {
 } from "./types";
 
 const DEFAULT_MAX_TURNS = 10;
+
+export interface ToolApproval {
+	toolCallId: string;
+	decision: "approve" | "deny";
+	/** Message sent to LLM when denied */
+	denyMessage?: string;
+}
 
 function getErrorMessage(error: unknown): string {
 	if (error instanceof Error) return error.message;
@@ -171,6 +180,34 @@ async function executeWithTimeout<T>(
 	});
 }
 
+/** Execute a tool with optional timeout and retry logic */
+async function executeToolWithRetry<T>(
+	fn: () => Promise<T> | T,
+	toolConfig: { timeout?: number; retries?: FunctionTool["retries"]; name: string },
+): Promise<T> {
+	const maxAttempts = (toolConfig.retries?.limit ?? 0) + 1;
+	const baseDelay = toolConfig.retries?.delay ?? 1000;
+	const backoff = toolConfig.retries?.backoff ?? "exponential";
+	const shouldRetry = toolConfig.retries?.shouldRetry ?? (() => true);
+
+	let lastError: unknown;
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			return await executeWithTimeout(fn, toolConfig.timeout, toolConfig.name);
+		} catch (error) {
+			lastError = error;
+			if (error instanceof ToolTimeoutError) throw error; // Don't retry timeouts
+			if (attempt < maxAttempts - 1 && shouldRetry(error)) {
+				const delay = backoff === "exponential" ? baseDelay * 2 ** attempt : baseDelay;
+				await new Promise((r) => setTimeout(r, delay));
+				continue;
+			}
+			throw error;
+		}
+	}
+	throw lastError;
+}
+
 export type ToolErrorFormatter = (toolName: string, error: unknown) => string;
 
 export type CallModelInputFilter<TContext> = (params: {
@@ -248,7 +285,7 @@ export async function run<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
 	options?: RunOptions<TContext, TOutput>,
-): Promise<RunResult<TOutput>> {
+): Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> {
 	validateBudgetOptions(options);
 
 	const model = options?.model ?? agent.model;
@@ -430,6 +467,23 @@ export async function run<TContext, TOutput = undefined>(
 				lastResponseId,
 				inputGuardrailResults,
 			);
+		}
+
+		// Check for tools that need approval before executing
+		const pendingApprovals = await collectPendingApprovals(
+			currentAgent,
+			response.toolCalls,
+			ctx.context,
+		);
+		if (pendingApprovals.length > 0) {
+			return new InterruptedRunResult<TOutput>({
+				pendingToolCalls: pendingApprovals,
+				messages: [...messages],
+				currentAgent,
+				context: ctx.context,
+				numTurns: ctx.numTurns,
+				usage: ctx.usage,
+			});
 		}
 
 		const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
@@ -1259,20 +1313,19 @@ async function executeToolCallsWithHandoffs<TContext>(
 						toolName: tcName,
 					});
 					try {
-						result = await executeWithTimeout(
+						result = await executeToolWithRetry(
 							() => tool.execute(ctx.context, params, { signal }),
-							tool.timeout,
-							tcName,
+							{ timeout: tool.timeout, retries: tool.retries, name: tcName },
 						);
 					} finally {
 						trace.endSpan(span);
 					}
 				} else {
-					result = await executeWithTimeout(
-						() => tool.execute(ctx.context, params, { signal }),
-						tool.timeout,
-						tcName,
-					);
+					result = await executeToolWithRetry(() => tool.execute(ctx.context, params, { signal }), {
+						timeout: tool.timeout,
+						retries: tool.retries,
+						name: tcName,
+					});
 				}
 
 				// Run tool output guardrails
@@ -1318,4 +1371,165 @@ async function executeToolCallsWithHandoffs<TContext>(
 	);
 
 	return { toolMessages: results, handoffAgent };
+}
+
+async function collectPendingApprovals<TContext>(
+	agent: Agent<TContext, any>,
+	toolCalls: ToolCall[],
+	context: TContext,
+): Promise<PendingToolCall[]> {
+	const functionTools = agent.tools.filter(isFunctionTool);
+	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
+	const pending: PendingToolCall[] = [];
+
+	for (const tc of toolCalls) {
+		const matchedTool = toolsByName.get(tc.function.name);
+		if (!matchedTool?.needsApproval) continue;
+
+		let parsedArgs: unknown;
+		try {
+			parsedArgs = JSON.parse(tc.function.arguments);
+		} catch {
+			parsedArgs = undefined;
+		}
+
+		let needsApproval: boolean;
+		if (typeof matchedTool.needsApproval === "function") {
+			needsApproval = await matchedTool.needsApproval(parsedArgs, context);
+		} else {
+			needsApproval = matchedTool.needsApproval;
+		}
+
+		if (needsApproval) {
+			pending.push({
+				toolCallId: tc.id,
+				toolName: tc.function.name,
+				arguments: tc.function.arguments,
+				parsedArguments: parsedArgs,
+			});
+		}
+	}
+
+	return pending;
+}
+
+export async function resumeRun<TContext, TOutput = undefined>(
+	interrupted: InterruptedRunResult<TOutput>,
+	approvals: ToolApproval[],
+	options?: RunOptions<TContext, TOutput>,
+): Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> {
+	const agent = interrupted.currentAgent as Agent<TContext, TOutput>;
+	const messages = [...interrupted.messages];
+
+	// The last message should be the assistant message with tool_calls
+	const lastMsg = messages[messages.length - 1];
+	if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.tool_calls) {
+		throw new StratusError(
+			"Cannot resume: last message is not an assistant message with tool_calls",
+		);
+	}
+
+	const approvalMap = new Map(approvals.map((a) => [a.toolCallId, a]));
+	const pendingIds = new Set(interrupted.pendingToolCalls.map((p) => p.toolCallId));
+	const functionTools = agent.tools.filter(isFunctionTool);
+	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
+
+	const model = options?.model ?? agent.model;
+	if (!model) {
+		throw new StratusError("No model provided. Pass a model to the agent or to run().");
+	}
+
+	const signal = options?.signal;
+	checkAborted(signal);
+
+	const context = (options?.context ?? interrupted.context) as TContext;
+
+	// Process each tool call from the assistant message
+	const toolMessages: ToolMessage[] = [];
+	for (const tc of lastMsg.tool_calls) {
+		if (pendingIds.has(tc.id)) {
+			// This was a pending approval tool call
+			const approval = approvalMap.get(tc.id);
+			if (!approval || approval.decision === "deny") {
+				const denyMsg = approval?.denyMessage ?? "Tool call denied by user";
+				toolMessages.push({
+					role: "tool",
+					tool_call_id: tc.id,
+					content: denyMsg,
+				});
+			} else {
+				// Approved — execute the tool
+				const matchedTool = toolsByName.get(tc.function.name);
+				if (!matchedTool) {
+					toolMessages.push({
+						role: "tool",
+						tool_call_id: tc.id,
+						content: `Error: Unknown tool "${tc.function.name}"`,
+					});
+					continue;
+				}
+				try {
+					const params = JSON.parse(tc.function.arguments);
+					const result = await executeToolWithRetry(
+						() => matchedTool.execute(context, params, { signal }),
+						{
+							timeout: matchedTool.timeout,
+							retries: matchedTool.retries,
+							name: tc.function.name,
+						},
+					);
+					toolMessages.push({
+						role: "tool",
+						tool_call_id: tc.id,
+						content: result,
+					});
+				} catch (error) {
+					toolMessages.push({
+						role: "tool",
+						tool_call_id: tc.id,
+						content: formatToolError(tc.function.name, error),
+					});
+				}
+			}
+		} else {
+			// Non-pending tool call — execute it now (it wasn't executed before the interrupt)
+			const matchedTool = toolsByName.get(tc.function.name);
+			if (!matchedTool) {
+				toolMessages.push({
+					role: "tool",
+					tool_call_id: tc.id,
+					content: `Error: Unknown tool "${tc.function.name}"`,
+				});
+				continue;
+			}
+			try {
+				const params = JSON.parse(tc.function.arguments);
+				const result = await executeWithTimeout(
+					() => matchedTool.execute(context, params, { signal }),
+					matchedTool.timeout,
+					tc.function.name,
+				);
+				toolMessages.push({
+					role: "tool",
+					tool_call_id: tc.id,
+					content: result,
+				});
+			} catch (error) {
+				toolMessages.push({
+					role: "tool",
+					tool_call_id: tc.id,
+					content: formatToolError(tc.function.name, error),
+				});
+			}
+		}
+	}
+
+	messages.push(...toolMessages);
+
+	// Continue the run from where we left off
+	return run(agent, messages, {
+		...options,
+		context,
+		model,
+	});
 }

@@ -78,6 +78,9 @@ export function subagentToTool<TParent>(sa: SubAgent<TParent>): FunctionTool<any
 					maxTurns: sa.maxTurns,
 					signal: options?.signal,
 				});
+				if (result.interrupted) {
+					return `Sub-agent "${sa.agent.name}" was interrupted waiting for tool approval`;
+				}
 				return result.output;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
