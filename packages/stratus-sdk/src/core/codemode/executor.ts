@@ -75,11 +75,7 @@ export class FunctionExecutor implements Executor {
 				...args: string[]
 			) => (...args: unknown[]) => Promise<unknown>;
 
-			const fn = new AsyncFunction(
-				"codemode",
-				"console",
-				`return await (${code})()`,
-			);
+			const fn = new AsyncFunction("codemode", "console", `return await (${code})()`);
 
 			const timeoutMs = this.#timeout;
 			const result = await Promise.race([

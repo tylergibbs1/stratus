@@ -13,6 +13,10 @@ export type {
 	ToolErrorFormatter,
 	CallModelInputFilter,
 	MaxTurnsErrorHandler,
+	CanUseTool,
+	ToolPermissionAllow,
+	ToolPermissionDeny,
+	ToolPermissionResult,
 } from "./run";
 
 export { createSession, forkSession, loadSession, prompt, resumeSession, Session } from "./session";
@@ -123,6 +127,14 @@ export type {
 	ContentPart,
 	TextContentPart,
 	ImageContentPart,
+	AudioFormat,
+	AudioVoice,
+	AudioConfig,
+	Modality,
+	PredictedOutput,
+	DataSource,
+	ContextManagement,
+	ContextManagementRule,
 } from "./types";
 
 export {

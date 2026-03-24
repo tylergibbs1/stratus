@@ -297,9 +297,7 @@ function jsonSchemaToTypeString(
 				const desc = propSchema.description;
 				const format = propSchema.format;
 				if (desc || format) {
-					const descText = desc
-						? escapeJsDoc(desc.replace(/\r?\n/g, " "))
-						: undefined;
+					const descText = desc ? escapeJsDoc(desc.replace(/\r?\n/g, " ")) : undefined;
 					const formatTag = format ? `@format ${escapeJsDoc(format)}` : undefined;
 					if (descText && formatTag) {
 						lines.push(`${indent}    /**`);

@@ -386,6 +386,7 @@ export class AzureResponsesModel implements Model {
 			if (s.metadata !== undefined) body.metadata = s.metadata;
 			if (s.user !== undefined) body.user = s.user;
 			// logprobs/topLogprobs are Chat Completions-only; not supported by the Responses API.
+			if (s.contextManagement !== undefined) body.context_management = s.contextManagement;
 		}
 
 		return body;
