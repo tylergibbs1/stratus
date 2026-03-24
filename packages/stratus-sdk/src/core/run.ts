@@ -1609,6 +1609,16 @@ async function collectPendingApprovals<TContext>(
 			parsedArgs = undefined;
 		}
 
+		// Evaluate needsApproval first — if the dynamic check returns false,
+		// skip entirely. canUseTool will gate at execution time instead.
+		let needsApproval: boolean;
+		if (typeof matchedTool.needsApproval === "function") {
+			needsApproval = await matchedTool.needsApproval(parsedArgs, context);
+		} else {
+			needsApproval = matchedTool.needsApproval;
+		}
+		if (!needsApproval) continue;
+
 		// If canUseTool would deny this tool, skip the approval — it will be
 		// denied during execution instead. This prevents unnecessary interrupts.
 		if (canUseTool) {
@@ -1616,21 +1626,12 @@ async function collectPendingApprovals<TContext>(
 			if (permission.behavior === "deny") continue;
 		}
 
-		let needsApproval: boolean;
-		if (typeof matchedTool.needsApproval === "function") {
-			needsApproval = await matchedTool.needsApproval(parsedArgs, context);
-		} else {
-			needsApproval = matchedTool.needsApproval;
-		}
-
-		if (needsApproval) {
-			pending.push({
-				toolCallId: tc.id,
-				toolName: tc.function.name,
-				arguments: tc.function.arguments,
-				parsedArguments: parsedArgs,
-			});
-		}
+		pending.push({
+			toolCallId: tc.id,
+			toolName: tc.function.name,
+			arguments: tc.function.arguments,
+			parsedArguments: parsedArgs,
+		});
 	}
 
 	return pending;
