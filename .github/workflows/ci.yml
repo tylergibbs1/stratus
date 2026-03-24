@@ -24,30 +24,11 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Build @usestratus/sdk (needed for mcp-aws typecheck)
-        run: bun run --filter @usestratus/sdk build
-
       - name: Typecheck @usestratus/sdk
         run: bunx tsc -p packages/stratus-sdk/tsconfig.build.json --noEmit
 
-      - name: Typecheck mcp-aws
-        run: bunx tsc -p packages/mcp-aws/tsconfig.json --noEmit
-
       - name: Test @usestratus/sdk
         run: bun test packages/stratus-sdk/tests/core packages/stratus-sdk/tests/azure
-
-      - name: Test mcp-aws
-        working-directory: packages/mcp-aws
-        run: |
-          bun test --timeout 15000 \
-            tests/errors.test.ts tests/auth/ tests/gating/ \
-            tests/session/memory.test.ts tests/session/dynamo.test.ts tests/session/sqlite.test.ts \
-            tests/disclosure/ tests/server.test.ts tests/codemode/ \
-            tests/context.test.ts tests/ssrf.test.ts tests/events.test.ts \
-            tests/compose.test.ts tests/edge-cases.test.ts tests/bun-transport.test.ts \
-            tests/integration/disclosure.test.ts tests/integration/mcp-protocol-roundtrip.test.ts \
-            tests/integration/e2e-server.test.ts tests/integration/prd-user-stories.test.ts \
-            tests/integration/lambda-jsonrpc.test.ts tests/integration/playwright-aws-deploy.test.ts
 
       - name: Build
         run: bun run --filter '*' build
@@ -71,21 +52,3 @@ jobs:
             npm publish --access public
           fi
 
-      - name: Release mcp-aws if version is new
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        working-directory: packages/mcp-aws
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="mcp-aws-v$VERSION"
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, skipping"
-          else
-            echo "Creating release $TAG"
-            gh release create "$TAG" --title "@usestratus/mcp-aws $VERSION" --generate-notes
-
-            echo "Publishing @usestratus/mcp-aws@$VERSION to npm"
-            npm publish --access public
-          fi

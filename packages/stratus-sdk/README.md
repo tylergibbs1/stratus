@@ -529,7 +529,6 @@ Stratus is a monorepo with two packages:
 | Package | Description |
 |---|---|
 | [`@usestratus/sdk`](packages/stratus-sdk/) | Agent SDK for Azure OpenAI (this README) |
-| [`@usestratus/mcp-aws`](packages/mcp-aws/) | MCP server framework for AWS — deploy MCP servers to Lambda with progressive disclosure, tool gating, and code mode |
 
 ## Development
 
