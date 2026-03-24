@@ -18,11 +18,12 @@ A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with t
 - **Built for Azure, not bolted on** — auto-endpoint detection, Entra ID auth, content filter errors as typed exceptions, and built-in retry. No 404 config spirals, no "which SDK do I use" confusion.
 - **Two API backends, one interface** — Chat Completions and Responses API through the same agent, tool, and session code. Start with one, switch with a single line.
 - **Multi-agent orchestration** — handoffs, subagents, guardrails, and hooks compose through a single run loop. Hooks can deny or modify tool calls at runtime.
-- **Client-side state you control** — save, resume, and fork conversations as portable JSON snapshots. No server-side threads, no opaque session IDs.
+- **Human-in-the-loop** — `canUseTool` permission callbacks, `needsApproval` per tool, `allowedTools` glob filtering, and graceful `interrupt()` for stopping runs mid-flight.
+- **Client-side state you control** — save, resume, and fork conversations as portable JSON snapshots. Hot-swap tools mid-session. No server-side threads, no opaque session IDs.
 - **Type-safe from schema to output** — Zod schemas drive tool parameters, structured output, and validation. Context types flow through agents, hooks, and guardrails at compile time.
 - **Zero dependencies** — only Zod as a peer dep. No transitive dependency sprawl, no framework lock-in.
 
-`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking`
+`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction`
 
 ## Install
 
