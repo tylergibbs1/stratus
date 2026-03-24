@@ -8,9 +8,9 @@
 
 import { z } from "zod";
 import { isFunctionTool } from "../hosted-tool";
+import type { AgentTool } from "../hosted-tool";
 import { tool } from "../tool";
 import type { FunctionTool } from "../tool";
-import type { AgentTool } from "../hosted-tool";
 import type { Executor } from "./executor";
 import { generateTypes, normalizeCode, sanitizeToolName } from "./types";
 

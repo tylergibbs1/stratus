@@ -13,7 +13,7 @@ import type { AgentTool } from "./hosted-tool";
 import type { Model, StreamEvent } from "./model";
 import type { RunResult } from "./result";
 import { stream as coreStream } from "./run";
-import type { CallModelInputFilter, ToolErrorFormatter } from "./run";
+import type { CallModelInputFilter, CanUseTool, ToolErrorFormatter } from "./run";
 import type { SubAgent } from "./subagent";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 
@@ -59,6 +59,10 @@ export interface SessionConfig<TContext = unknown, TOutput = undefined> {
 	toolInputGuardrails?: ToolInputGuardrail<TContext>[];
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[];
 	resetToolChoice?: boolean;
+	/** Restrict which tools are available. Supports glob wildcards (e.g. "mcp__github__*"). */
+	allowedTools?: string[];
+	/** Centralized permission callback invoked before any tool executes. */
+	canUseTool?: CanUseTool<TContext>;
 	/** Optional persistence backend. When set, sessions auto-save after each interaction. */
 	store?: SessionStore;
 	/** Session ID for persistence. Auto-generated if not provided. */
@@ -87,6 +91,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _toolInputGuardrails: ToolInputGuardrail<TContext>[];
 	private readonly _toolOutputGuardrails: ToolOutputGuardrail<TContext>[];
 	private readonly _resetToolChoice: boolean | undefined;
+	private readonly _allowedTools: string[] | undefined;
+	private readonly _canUseTool: CanUseTool<TContext> | undefined;
 	private readonly _store: SessionStore | undefined;
 	private readonly _onStateChange: SessionStateChangeListener | undefined;
 	private _messages: ChatMessage[] = [];
@@ -111,6 +117,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		this._toolInputGuardrails = config.toolInputGuardrails ?? [];
 		this._toolOutputGuardrails = config.toolOutputGuardrails ?? [];
 		this._resetToolChoice = config.resetToolChoice;
+		this._allowedTools = config.allowedTools;
+		this._canUseTool = config.canUseTool;
 		this._store = config.store;
 		this._onStateChange = config.onStateChange;
 		this._agent = new Agent<TContext, TOutput>({
@@ -168,6 +176,36 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		};
 	}
 
+	/** Add tools to the session's agent at runtime (e.g. from a newly connected MCP client). */
+	addTools(tools: AgentTool[]): void {
+		if (this._closed) throw new StratusError("Session is closed");
+		if (this._streaming) throw new StratusError("Cannot modify tools while streaming");
+		(this._agent.tools as AgentTool[]).push(...tools);
+	}
+
+	/** Remove tools by name from the session's agent at runtime. */
+	removeTools(toolNames: string[]): void {
+		if (this._closed) throw new StratusError("Session is closed");
+		if (this._streaming) throw new StratusError("Cannot modify tools while streaming");
+		const nameSet = new Set(toolNames);
+		const tools = this._agent.tools as AgentTool[];
+		for (let i = tools.length - 1; i >= 0; i--) {
+			const t = tools[i]!;
+			const name = t.type === "function" ? t.name : (t as any).definition?.type;
+			if (name && nameSet.has(name)) {
+				tools.splice(i, 1);
+			}
+		}
+	}
+
+	/** Replace all tools on the session's agent. */
+	setTools(tools: AgentTool[]): void {
+		if (this._closed) throw new StratusError("Session is closed");
+		if (this._streaming) throw new StratusError("Cannot modify tools while streaming");
+		(this._agent.tools as AgentTool[]).length = 0;
+		(this._agent.tools as AgentTool[]).push(...tools);
+	}
+
 	close(): void {
 		this._closed = true;
 		this._messages = [];
@@ -207,6 +245,8 @@ export class Session<TContext = unknown, TOutput = undefined> {
 				toolOutputGuardrails:
 					this._toolOutputGuardrails.length > 0 ? this._toolOutputGuardrails : undefined,
 				resetToolChoice: this._resetToolChoice,
+				allowedTools: this._allowedTools,
+				canUseTool: this._canUseTool,
 			});
 
 			this._resultPromise = resultPromise.then((result) => {

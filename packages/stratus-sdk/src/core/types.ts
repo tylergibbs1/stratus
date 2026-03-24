@@ -82,6 +82,36 @@ export type ReasoningSummary = "auto" | "concise" | "detailed";
 
 export type Truncation = "auto" | "disabled";
 
+export type AudioFormat = "wav" | "mp3" | "flac" | "opus" | "pcm16";
+export type AudioVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
+export type Modality = "text" | "audio";
+
+export interface AudioConfig {
+	voice: AudioVoice;
+	format: AudioFormat;
+}
+
+export interface PredictedOutput {
+	type: "content";
+	content: string;
+}
+
+export interface DataSource {
+	type: string;
+	[key: string]: unknown;
+}
+
+export interface ContextManagementRule {
+	type: string;
+	[key: string]: unknown;
+}
+
+/**
+ * Server-side context management rules for the Responses API.
+ * Passed as an array of rule objects.
+ */
+export type ContextManagement = ContextManagementRule[];
+
 export interface ModelSettings {
 	temperature?: number;
 	topP?: number;
@@ -102,6 +132,16 @@ export interface ModelSettings {
 	user?: string;
 	logprobs?: boolean;
 	topLogprobs?: number;
+	/** Predicted output for faster completions (Chat Completions only). */
+	prediction?: PredictedOutput;
+	/** Audio output configuration (Chat Completions only, requires gpt-4o-audio models). */
+	audio?: AudioConfig;
+	/** Output modalities (Chat Completions only). Defaults to ["text"]. */
+	modalities?: Modality[];
+	/** Azure On Your Data sources (Chat Completions only). */
+	dataSources?: DataSource[];
+	/** Server-side context management (Responses API only). */
+	contextManagement?: ContextManagement;
 }
 
 export type ResponseFormat =

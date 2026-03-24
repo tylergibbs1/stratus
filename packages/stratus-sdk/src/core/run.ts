@@ -255,6 +255,30 @@ async function executeToolWithRetry<T>(
 	throw lastError;
 }
 
+export interface ToolPermissionAllow {
+	behavior: "allow";
+	/** Optionally provide modified input to use instead of the original. */
+	updatedInput?: unknown;
+}
+
+export interface ToolPermissionDeny {
+	behavior: "deny";
+	/** Message sent to the LLM explaining the denial. */
+	message: string;
+}
+
+export type ToolPermissionResult = ToolPermissionAllow | ToolPermissionDeny;
+
+/**
+ * Callback invoked before any tool execution. Return "allow" to proceed or
+ * "deny" to block. When denied, the message is sent back to the LLM.
+ */
+export type CanUseTool<TContext = any> = (
+	toolName: string,
+	input: unknown,
+	context: TContext,
+) => ToolPermissionResult | Promise<ToolPermissionResult>;
+
 export type ToolErrorFormatter = (toolName: string, error: unknown) => string;
 
 export type CallModelInputFilter<TContext> = (params: {
@@ -295,6 +319,18 @@ export interface RunOptions<TContext, TOutput = undefined> {
 	resetToolChoice?: boolean;
 	/** Additional subagents available at runtime beyond those defined on the agent */
 	dynamicSubagents?: SubAgent<TContext>[];
+	/**
+	 * Restrict which tools are available to the agent. Supports exact names and
+	 * glob-style wildcards (e.g. "mcp__github__*"). When set, only tools whose
+	 * names match at least one pattern are included in the request.
+	 */
+	allowedTools?: string[];
+	/**
+	 * Centralized permission callback invoked before any tool executes.
+	 * Return `{ behavior: "allow" }` or `{ behavior: "deny", message }`.
+	 * Takes precedence over per-tool `needsApproval` and `beforeToolCall` hooks.
+	 */
+	canUseTool?: CanUseTool<TContext>;
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -356,6 +392,8 @@ export async function run<TContext, TOutput = undefined>(
 	const toolInputGuardrails = options?.toolInputGuardrails ?? [];
 	const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
 	const dynamicSubagents = options?.dynamicSubagents;
+	const allowedTools = options?.allowedTools;
+	const canUseToolFn = options?.canUseTool;
 
 	// Fire beforeRun hook on the entry agent
 	const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -412,7 +450,7 @@ export async function run<TContext, TOutput = undefined>(
 	for (let turn = 0; turn < maxTurns; turn++) {
 		checkAborted(signal);
 
-		const toolDefs = await buildToolDefs(currentAgent, ctx.context, dynamicSubagents);
+		const toolDefs = await buildToolDefs(currentAgent, ctx.context, dynamicSubagents, allowedTools);
 		let request: ModelRequest = {
 			messages,
 			tools: toolDefs.length > 0 ? toolDefs : undefined,
@@ -524,6 +562,7 @@ export async function run<TContext, TOutput = undefined>(
 			currentAgent,
 			response.toolCalls,
 			ctx.context,
+			canUseToolFn,
 		);
 		if (pendingApprovals.length > 0) {
 			return new InterruptedRunResult<TOutput>({
@@ -548,6 +587,7 @@ export async function run<TContext, TOutput = undefined>(
 			toolOutputGuardrails,
 			undefined,
 			dynamicSubagents,
+			canUseToolFn,
 		);
 		messages.push(...toolMessages);
 
@@ -681,6 +721,12 @@ export interface StreamOptions<TContext, TOutput = undefined>
 export interface StreamedRunResult<TOutput = undefined> {
 	stream: AsyncGenerator<StreamEvent>;
 	result: Promise<RunResult<TOutput>>;
+	/**
+	 * Gracefully interrupt the run. The current model call or tool execution
+	 * will finish, then the run returns a partial RunResult with what has been
+	 * collected so far. Unlike abort (which throws), interrupt resolves normally.
+	 */
+	interrupt(): void;
 }
 
 export function stream<TContext, TOutput = undefined>(
@@ -695,9 +741,15 @@ export function stream<TContext, TOutput = undefined>(
 		rejectResult = reject;
 	});
 
-	const gen = streamInternal(agent, input, options, resolveResult!, rejectResult!);
+	let interruptRequested = false;
+	const interruptFn = () => {
+		interruptRequested = true;
+	};
+	const isInterrupted = () => interruptRequested;
 
-	return { stream: gen, result: resultPromise };
+	const gen = streamInternal(agent, input, options, resolveResult!, rejectResult!, isInterrupted);
+
+	return { stream: gen, result: resultPromise, interrupt: interruptFn };
 }
 
 async function* streamInternal<TContext, TOutput = undefined>(
@@ -706,6 +758,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 	options: StreamOptions<TContext, TOutput> | undefined,
 	resolveResult: (result: RunResult<TOutput>) => void,
 	rejectResult: (error: unknown) => void,
+	isInterrupted?: () => boolean,
 ): AsyncGenerator<StreamEvent> {
 	try {
 		validateBudgetOptions(options);
@@ -729,6 +782,8 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		const toolInputGuardrails = options?.toolInputGuardrails ?? [];
 		const toolOutputGuardrails = options?.toolOutputGuardrails ?? [];
 		const dynamicSubagents = options?.dynamicSubagents;
+		const allowedTools = options?.allowedTools;
+		const canUseToolFn = options?.canUseTool;
 
 		// Fire beforeRun hook on the entry agent
 		const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -785,7 +840,33 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		for (let turn = 0; turn < maxTurns; turn++) {
 			checkAborted(signal);
 
-			const toolDefs = await buildToolDefs(currentAgent, ctx.context, dynamicSubagents);
+			// Check for graceful interrupt between turns
+			if (isInterrupted?.()) {
+				const lastMsg = messages[messages.length - 1];
+				const partialOutput =
+					lastMsg && lastMsg.role === "assistant" ? (lastMsg.content ?? "") : "";
+				resolveResult(
+					new RunResult<TOutput>({
+						output: partialOutput,
+						messages,
+						usage: ctx.usage,
+						lastAgent: currentAgent,
+						finishReason: "stop",
+						numTurns: ctx.numTurns,
+						totalCostUsd: ctx.totalCostUsd,
+						responseId: lastResponseId,
+						inputGuardrailResults,
+					}),
+				);
+				return;
+			}
+
+			const toolDefs = await buildToolDefs(
+				currentAgent,
+				ctx.context,
+				dynamicSubagents,
+				allowedTools,
+			);
 			let request: ModelRequest = {
 				messages,
 				tools: toolDefs.length > 0 ? toolDefs : undefined,
@@ -904,6 +985,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				currentAgent,
 				finalResponse.toolCalls,
 				ctx.context,
+				canUseToolFn,
 			);
 			if (pendingApprovals.length > 0) {
 				const interrupted = new InterruptedRunResult<TOutput>({
@@ -932,6 +1014,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 				toolOutputGuardrails,
 				(event) => channel.push(event),
 				dynamicSubagents,
+				canUseToolFn,
 			).then(
 				(result) => {
 					channel.done();
@@ -1140,17 +1223,34 @@ async function buildFinalResult<TContext, TOutput>(
 	return result;
 }
 
+/** Test whether a tool name matches a glob-style pattern (supports trailing `*` wildcard). */
+function matchesAllowedPattern(name: string, pattern: string): boolean {
+	if (pattern === name) return true;
+	if (pattern.endsWith("*")) {
+		return name.startsWith(pattern.slice(0, -1));
+	}
+	return false;
+}
+
+function isAllowedTool(name: string, allowedTools?: string[]): boolean {
+	if (!allowedTools) return true;
+	return allowedTools.some((pattern) => matchesAllowedPattern(name, pattern));
+}
+
 async function buildToolDefs(
 	agent: Agent<any, any>,
 	context: any,
 	extraSubagents?: SubAgent[],
+	allowedTools?: string[],
 ): Promise<(ToolDefinition | HostedToolDefinition)[]> {
 	const defs: (ToolDefinition | HostedToolDefinition)[] = [];
 
 	for (const t of agent.tools) {
 		if (isHostedTool(t)) {
+			if (!isAllowedTool(t.definition.type, allowedTools)) continue;
 			defs.push(t.definition);
 		} else {
+			if (!isAllowedTool(t.name, allowedTools)) continue;
 			// Check isEnabled for function tools
 			if (!(await checkEnabled(t.isEnabled, context))) continue;
 			defs.push(toolToDefinition(t));
@@ -1158,9 +1258,11 @@ async function buildToolDefs(
 	}
 	const allSubagents = [...agent.subagents, ...(extraSubagents ?? [])];
 	for (const sa of allSubagents) {
+		if (!isAllowedTool(sa.toolName, allowedTools)) continue;
 		defs.push(subagentToDefinition(sa));
 	}
 	for (const h of agent.handoffs) {
+		if (!isAllowedTool(h.toolName, allowedTools)) continue;
 		// Check isEnabled for handoffs
 		if (!(await checkEnabled(h.isEnabled, context))) continue;
 		defs.push(handoffToDefinition(h));
@@ -1233,6 +1335,7 @@ async function executeToolCallsWithHandoffs<TContext>(
 	toolOutputGuardrails?: ToolOutputGuardrail<TContext>[],
 	onStreamEvent?: (event: StreamEvent) => void,
 	extraSubagents?: SubAgent<TContext>[],
+	canUseTool?: CanUseTool<TContext>,
 ): Promise<{ toolMessages: ToolMessage[]; handoffAgent?: Agent<TContext, any> }> {
 	let handoffAgent: Agent<TContext, any> | undefined;
 
@@ -1362,6 +1465,21 @@ async function executeToolCallsWithHandoffs<TContext>(
 				let params = JSON.parse(tc.function.arguments);
 				const fullToolCall: ToolCall = { id: tc.id, type: "function", function: tc.function };
 
+				// Check canUseTool permission callback first
+				if (canUseTool) {
+					const permission = await canUseTool(tcName, params, ctx.context);
+					if (permission.behavior === "deny") {
+						return {
+							role: "tool" as const,
+							tool_call_id: tc.id,
+							content: permission.message,
+						};
+					}
+					if (permission.updatedInput !== undefined) {
+						params = permission.updatedInput;
+					}
+				}
+
 				// Fire beforeToolCall hook
 				const decision = await resolveBeforeToolCallHook(agent.hooks.beforeToolCall, {
 					agent,
@@ -1474,6 +1592,7 @@ async function collectPendingApprovals<TContext>(
 	agent: Agent<TContext, any>,
 	toolCalls: ToolCall[],
 	context: TContext,
+	canUseTool?: CanUseTool<TContext>,
 ): Promise<PendingToolCall[]> {
 	const functionTools = agent.tools.filter(isFunctionTool);
 	const toolsByName = new Map(functionTools.map((t) => [t.name, t]));
@@ -1488,6 +1607,13 @@ async function collectPendingApprovals<TContext>(
 			parsedArgs = JSON.parse(tc.function.arguments);
 		} catch {
 			parsedArgs = undefined;
+		}
+
+		// If canUseTool would deny this tool, skip the approval — it will be
+		// denied during execution instead. This prevents unnecessary interrupts.
+		if (canUseTool) {
+			const permission = await canUseTool(tc.function.name, parsedArgs, context);
+			if (permission.behavior === "deny") continue;
 		}
 
 		let needsApproval: boolean;
@@ -1530,9 +1656,7 @@ export async function resumeRun<TContext, TOutput = undefined>(
 	const pendingIds = new Set(interrupted.pendingToolCalls.map((p) => p.toolCallId));
 	const functionTools = agent.tools.filter(isFunctionTool);
 	const subagentTools = (interrupted.currentAgent.subagents ?? []).map(subagentToTool);
-	const toolsByName = new Map(
-		[...functionTools, ...subagentTools].map((t) => [t.name, t]),
-	);
+	const toolsByName = new Map([...functionTools, ...subagentTools].map((t) => [t.name, t]));
 
 	const model = options?.model ?? agent.model;
 	if (!model) {

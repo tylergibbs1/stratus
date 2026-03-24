@@ -214,6 +214,10 @@ export class AzureChatCompletionsModel implements Model {
 			if (s.user !== undefined) body.user = s.user;
 			if (s.logprobs !== undefined) body.logprobs = s.logprobs;
 			if (s.topLogprobs !== undefined) body.top_logprobs = s.topLogprobs;
+			if (s.prediction !== undefined) body.prediction = s.prediction;
+			if (s.modalities !== undefined) body.modalities = s.modalities;
+			if (s.audio !== undefined) body.audio = s.audio;
+			if (s.dataSources !== undefined) body.data_sources = s.dataSources;
 		}
 
 		return body;
