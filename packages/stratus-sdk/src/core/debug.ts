@@ -5,7 +5,16 @@ export interface DebugLogger {
 const MAX_DATA_LENGTH = 500;
 
 function truncate(value: unknown): string {
-	const str = typeof value === "string" ? value : JSON.stringify(value);
+	let str: string;
+	if (typeof value === "string") {
+		str = value;
+	} else {
+		try {
+			str = JSON.stringify(value);
+		} catch {
+			str = String(value);
+		}
+	}
 	if (str.length <= MAX_DATA_LENGTH) return str;
 	return `${str.slice(0, MAX_DATA_LENGTH)}… (${str.length} chars)`;
 }

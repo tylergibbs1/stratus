@@ -13,19 +13,21 @@ export function validateAgent(agent: { tools: AgentTool[]; name: string }): Vali
 
 	const seen = new Set<string>();
 	for (const t of agent.tools) {
-		if (!isFunctionTool(t)) continue;
+		const name = isFunctionTool(t) ? t.name : t.name;
 
-		if (seen.has(t.name)) {
-			errors.push(`Duplicate tool name "${t.name}"`);
+		if (seen.has(name)) {
+			errors.push(`Duplicate tool name "${name}"`);
 		}
-		seen.add(t.name);
+		seen.add(name);
 
-		if (t.description.trim() === "") {
-			warnings.push(`Tool "${t.name}" has an empty description`);
-		}
+		if (isFunctionTool(t)) {
+			if (t.description.trim() === "") {
+				warnings.push(`Tool "${t.name}" has an empty description`);
+			}
 
-		if (t.timeout !== undefined && t.timeout <= 0) {
-			errors.push(`Tool "${t.name}" has invalid timeout: ${t.timeout}ms (must be > 0)`);
+			if (t.timeout !== undefined && t.timeout <= 0) {
+				errors.push(`Tool "${t.name}" has invalid timeout: ${t.timeout}ms (must be > 0)`);
+			}
 		}
 	}
 

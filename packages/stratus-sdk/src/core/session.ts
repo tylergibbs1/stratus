@@ -161,6 +161,9 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	}
 
 	async wait(options?: { signal?: AbortSignal }): Promise<RunResult<TOutput>> {
+		if (this._resultPromise && !this._streaming) {
+			throw new StratusError("No new message to process. Call send() before wait().");
+		}
 		for await (const _event of this.stream(options)) {
 			// drain
 		}
