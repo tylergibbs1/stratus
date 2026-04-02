@@ -13,6 +13,8 @@ export interface ModelRequest {
 	modelSettings?: ModelSettings;
 	responseFormat?: ResponseFormat;
 	previousResponseId?: string;
+	/** Raw input items appended to the Responses API input array (compaction items, MCP approval responses, etc.). */
+	rawInputItems?: Record<string, unknown>[];
 }
 
 export interface UsageInfo {

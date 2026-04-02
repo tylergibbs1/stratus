@@ -17,7 +17,7 @@ import type {
 	ToolChoice,
 	ToolDefinition,
 } from "../core/types";
-import { resolveResponsesUrl } from "./endpoint";
+import { resolveResponsesBaseUrl, resolveResponsesUrl } from "./endpoint";
 import { abortableSleep, computeRetryDelay, isRetryableStatus } from "./retry";
 import { parseSSE } from "./sse-parser";
 
@@ -30,6 +30,56 @@ export interface AzureResponsesModelConfig {
 	store?: boolean;
 	/** Maximum number of retries on 429 / network errors (default 3). */
 	maxRetries?: number;
+}
+
+// --- Public types for new Responses API features ---
+
+export type ResponseStatus =
+	| "queued"
+	| "in_progress"
+	| "completed"
+	| "failed"
+	| "incomplete"
+	| "cancelled";
+
+export interface RawResponse {
+	id: string;
+	status: ResponseStatus;
+	output?: Record<string, unknown>[];
+	usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+	incomplete_details?: { reason?: string };
+	error?: { message?: string; type?: string; code?: string };
+	[key: string]: unknown;
+}
+
+export interface CompactOptions {
+	model?: string;
+	input?: Record<string, unknown>[];
+	previousResponseId?: string;
+	signal?: AbortSignal;
+}
+
+export interface CompactResponse {
+	output: Record<string, unknown>[];
+	usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+}
+
+export interface InputItemList {
+	data: Record<string, unknown>[];
+	hasMore: boolean;
+	firstId?: string;
+	lastId?: string;
+}
+
+export interface McpApprovalResponseItem {
+	type: "mcp_approval_response";
+	approval_request_id: string;
+	approve: boolean;
+}
+
+export interface RetrieveStreamOptions {
+	startingAfter?: number;
+	signal?: AbortSignal;
 }
 
 const DEFAULT_API_VERSION = "2025-04-01-preview";
@@ -70,6 +120,7 @@ const HOSTED_TOOL_EVENT_MAP = new Map<string, { toolType: string; status: Hosted
 
 export class AzureResponsesModel implements Model {
 	private readonly url: string;
+	private readonly baseUrl: string;
 	private readonly apiKey?: string;
 	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
@@ -88,7 +139,9 @@ export class AzureResponsesModel implements Model {
 		this.deployment = config.deployment;
 		this.store = config.store ?? false;
 		this.maxRetries = config.maxRetries ?? 3;
-		this.url = resolveResponsesUrl(config.endpoint, config.apiVersion ?? DEFAULT_API_VERSION);
+		const apiVersion = config.apiVersion ?? DEFAULT_API_VERSION;
+		this.url = resolveResponsesUrl(config.endpoint, apiVersion);
+		this.baseUrl = resolveResponsesBaseUrl(config.endpoint, apiVersion);
 	}
 
 	private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -324,6 +377,278 @@ export class AzureResponsesModel implements Model {
 		throw new ModelError("Max SSE retries exceeded for rate-limited request", { status: 429 });
 	}
 
+	// --- Compact endpoint ---
+
+	async compact(options: CompactOptions): Promise<CompactResponse> {
+		const body: Record<string, unknown> = {
+			model: options.model ?? this.deployment,
+		};
+		if (options.input) {
+			body.input = options.input;
+		}
+		if (options.previousResponseId) {
+			body.previous_response_id = options.previousResponseId;
+		}
+
+		const url = this.resolveSubEndpoint("/compact");
+		const response = await this.doFetchUrl(url, "POST", body, options.signal);
+		const json = await response.json();
+		return {
+			output: json.output ?? [],
+			usage: json.usage,
+		};
+	}
+
+	// --- Background tasks ---
+
+	async createBackgroundResponse(
+		request: ModelRequest,
+		options?: ModelRequestOptions & { stream?: boolean },
+	): Promise<RawResponse> {
+		const body = this.buildRequestBody(request, options?.stream ?? false);
+		body.background = true;
+		const response = await this.doFetch(body, options?.signal);
+		return response.json();
+	}
+
+	async *streamBackgroundResponse(
+		responseId: string,
+		options?: RetrieveStreamOptions,
+	): AsyncGenerator<StreamEvent> {
+		const params = new URLSearchParams({ stream: "true" });
+		if (options?.startingAfter !== undefined) {
+			params.set("starting_after", String(options.startingAfter));
+		}
+		const url = `${this.resolveSubEndpoint(`/${responseId}`)}${this.urlHasQuery() ? "&" : "?"}${params}`;
+
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method: "GET",
+			headers: { ...authHeaders },
+			signal: options?.signal,
+		});
+
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+		if (!response.body) {
+			throw new ModelError("Response body is null");
+		}
+
+		let content = "";
+		const toolCalls = new Map<string, { callId: string; name: string; arguments: string }>();
+		let usage: UsageInfo | undefined;
+		let finishReason: FinishReason | undefined;
+		let responseIdOut: string | undefined;
+
+		for await (const data of parseSSE(response.body)) {
+			let event: ResponsesStreamEvent;
+			try {
+				event = JSON.parse(data);
+			} catch {
+				continue;
+			}
+			const streamEvent = this.mapSseEvent(event, content, toolCalls);
+			if (streamEvent) {
+				if (streamEvent.type === "content_delta") content += streamEvent.content;
+				yield streamEvent;
+			}
+			if (event.type === "response.completed") {
+				const resp = event.response;
+				if (resp?.id) responseIdOut = resp.id;
+				if (resp?.usage) usage = parseResponsesUsage(resp.usage);
+				finishReason = mapStatus(resp?.status);
+			}
+			if (event.type === "response.failed") {
+				const errorMsg = event.response?.error?.message ?? "Response failed";
+				throw new ModelError(`Azure API response failed: ${errorMsg}`, { status: 200 });
+			}
+			if (event.type === "error") {
+				const err = event.error;
+				const errorType = err?.type ?? "unknown";
+				const errorMsg = err?.message ?? "Unknown error";
+				throw new ModelError(`Azure API stream error (${errorType}): ${errorMsg}`, { status: 200 });
+			}
+		}
+
+		const finalToolCalls: ToolCall[] = Array.from(toolCalls.values()).map((tc) => ({
+			id: tc.callId,
+			type: "function" as const,
+			function: { name: tc.name, arguments: tc.arguments },
+		}));
+
+		yield {
+			type: "done",
+			response: {
+				content: content || null,
+				toolCalls: finalToolCalls,
+				usage,
+				finishReason,
+				responseId: responseIdOut,
+			},
+		};
+	}
+
+	// --- Retrieve / Delete / Cancel / List ---
+
+	async retrieveResponse(
+		responseId: string,
+		options?: { signal?: AbortSignal },
+	): Promise<RawResponse> {
+		const url = this.resolveSubEndpoint(`/${responseId}`);
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method: "GET",
+			headers: { "Content-Type": "application/json", ...authHeaders },
+			signal: options?.signal,
+		});
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+		return response.json();
+	}
+
+	async deleteResponse(responseId: string, options?: { signal?: AbortSignal }): Promise<void> {
+		const url = this.resolveSubEndpoint(`/${responseId}`);
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method: "DELETE",
+			headers: { ...authHeaders },
+			signal: options?.signal,
+		});
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+	}
+
+	async cancelResponse(
+		responseId: string,
+		options?: { signal?: AbortSignal },
+	): Promise<RawResponse> {
+		const url = this.resolveSubEndpoint(`/${responseId}/cancel`);
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json", ...authHeaders },
+			body: JSON.stringify({}),
+			signal: options?.signal,
+		});
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+		return response.json();
+	}
+
+	async listInputItems(
+		responseId: string,
+		options?: { signal?: AbortSignal },
+	): Promise<InputItemList> {
+		const url = this.resolveSubEndpoint(`/${responseId}/input_items`);
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method: "GET",
+			headers: { "Content-Type": "application/json", ...authHeaders },
+			signal: options?.signal,
+		});
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+		const json = await response.json();
+		return {
+			data: json.data ?? [],
+			hasMore: json.has_more ?? false,
+			firstId: json.first_id,
+			lastId: json.last_id,
+		};
+	}
+
+	// --- URL helpers ---
+
+	private resolveSubEndpoint(path: string): string {
+		// baseUrl may contain ?api-version=... (foundry) or be a plain path (standard)
+		if (this.baseUrl.includes("?")) {
+			const [base, query] = this.baseUrl.split("?");
+			return `${base}${path}?${query}`;
+		}
+		return `${this.baseUrl}${path}`;
+	}
+
+	private urlHasQuery(): boolean {
+		return this.baseUrl.includes("?");
+	}
+
+	private async doFetchUrl(
+		url: string,
+		method: string,
+		body: Record<string, unknown>,
+		signal?: AbortSignal,
+	): Promise<Response> {
+		const authHeaders = await this.getAuthHeaders();
+		const response = await fetch(url, {
+			method,
+			headers: { "Content-Type": "application/json", ...authHeaders },
+			body: JSON.stringify(body),
+			signal,
+		});
+		if (!response.ok) {
+			await this.handleErrorResponse(response);
+		}
+		return response;
+	}
+
+	// --- SSE event mapper (shared between streaming methods) ---
+
+	private mapSseEvent(
+		event: ResponsesStreamEvent,
+		_content: string,
+		toolCalls: Map<string, { callId: string; name: string; arguments: string }>,
+	): StreamEvent | null {
+		switch (event.type) {
+			case "response.output_text.delta":
+				return { type: "content_delta", content: event.delta ?? "" };
+			case "response.output_item.added": {
+				if (event.item?.type === "function_call") {
+					const itemId = event.item.id ?? "";
+					const callId = event.item.call_id ?? "";
+					const name = event.item.name ?? "";
+					toolCalls.set(itemId, { callId, name, arguments: "" });
+					if (callId && name) {
+						return { type: "tool_call_start", toolCall: { id: callId, name } };
+					}
+				}
+				return null;
+			}
+			case "response.function_call_arguments.delta": {
+				const itemId = event.item_id ?? "";
+				const existing = toolCalls.get(itemId);
+				if (existing) {
+					const argDelta = event.delta ?? "";
+					existing.arguments += argDelta;
+					return { type: "tool_call_delta", toolCallId: existing.callId, arguments: argDelta };
+				}
+				return null;
+			}
+			case "response.output_item.done": {
+				if (event.item?.type === "function_call") {
+					const itemId = event.item.id ?? "";
+					const existing = toolCalls.get(itemId);
+					if (existing) {
+						if (event.item.arguments) existing.arguments = event.item.arguments;
+						return { type: "tool_call_done", toolCallId: existing.callId };
+					}
+				}
+				return null;
+			}
+			default: {
+				const mapped = HOSTED_TOOL_EVENT_MAP.get(event.type);
+				if (mapped) {
+					return { type: "hosted_tool_call", toolType: mapped.toolType, status: mapped.status };
+				}
+				return null;
+			}
+		}
+	}
+
 	private buildRequestBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
 		// ModelSettings.store overrides config-level store
 		const effectiveStore = request.modelSettings?.store ?? this.store;
@@ -339,6 +664,11 @@ export class AzureResponsesModel implements Model {
 		}
 
 		body.input = input;
+
+		// Append raw input items (compaction items, MCP approval responses, etc.)
+		if (request.rawInputItems && request.rawInputItems.length > 0) {
+			(body.input as unknown[]).push(...request.rawInputItems);
+		}
 
 		if (stream) {
 			body.stream = true;
@@ -387,6 +717,8 @@ export class AzureResponsesModel implements Model {
 			if (s.user !== undefined) body.user = s.user;
 			// logprobs/topLogprobs are Chat Completions-only; not supported by the Responses API.
 			if (s.contextManagement !== undefined) body.context_management = s.contextManagement;
+			if (s.include !== undefined) body.include = s.include;
+			if (s.background !== undefined) body.background = s.background;
 		}
 
 		return body;
@@ -768,7 +1100,8 @@ type ResponsesInputItem =
 	| { type: "message"; role: "user"; content: ResponsesContentPart[] }
 	| { type: "message"; role: "assistant"; content: ResponsesContentPart[] }
 	| { type: "function_call"; call_id: string; name: string; arguments: string }
-	| { type: "function_call_output"; call_id: string; output: string };
+	| { type: "function_call_output"; call_id: string; output: string }
+	| { type: "mcp_approval_response"; approve: boolean; approval_request_id: string };
 
 interface ResponsesStreamItem {
 	id?: string;
