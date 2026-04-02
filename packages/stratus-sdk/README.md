@@ -23,7 +23,7 @@ A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with t
 - **Type-safe from schema to output** — Zod schemas drive tool parameters, structured output, and validation. Context types flow through agents, hooks, and guardrails at compile time.
 - **Zero dependencies** — only Zod as a peer dep. No transitive dependency sprawl, no framework lock-in.
 
-`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction`
+`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
 
 ## Install
 
@@ -41,13 +41,9 @@ bun add zod
 
 ```ts
 import { z } from "zod";
-import { Agent, AzureResponsesModel, run, tool } from "@usestratus/sdk";
+import { Agent, createModel, run, tool } from "@usestratus/sdk";
 
-const model = new AzureResponsesModel({
-  endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-  apiKey: process.env.AZURE_OPENAI_API_KEY!,
-  deployment: "gpt-5.2",
-});
+const model = createModel(); // reads AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT
 
 const getWeather = tool({
   name: "get_weather",
@@ -161,15 +157,15 @@ import { createSession } from "@usestratus/sdk";
 
 const session = createSession({ model, tools: [myTool] });
 
+// Option 1: stream events
 session.send("Hello!");
 for await (const event of session.stream()) {
   // handle events
 }
 
+// Option 2: just get the result
 session.send("Follow-up question");
-for await (const event of session.stream()) {
-  // handle events
-}
+const result = await session.wait();
 
 // Save and resume sessions
 const snapshot = session.save();
@@ -448,51 +444,90 @@ Implement the `Executor` interface for custom sandboxes (containers, Cloudflare 
 
 ## Imports
 
-Stratus provides three export paths:
+Stratus provides four export paths:
 
 ```ts
 // Everything (core + Azure)
-import { Agent, run, tool, AzureChatCompletionsModel, AzureResponsesModel } from "@usestratus/sdk";
+import { Agent, run, tool, createModel } from "@usestratus/sdk";
 
 // Core only (provider-agnostic)
-import { Agent, run, tool } from "@usestratus/sdk/core";
+import { Agent, run, tool, validateAgent } from "@usestratus/sdk/core";
 
 // Azure provider only
-import { AzureChatCompletionsModel, AzureResponsesModel } from "@usestratus/sdk/azure";
+import { createModel, AzureResponsesModel } from "@usestratus/sdk/azure";
+
+// Test utilities (keep out of production bundles)
+import { createMockModel, textResponse, toolCallResponse } from "@usestratus/sdk/testing";
 ```
 
 ## Configuration
 
 ### Azure OpenAI
 
-Stratus includes two interchangeable Azure model implementations:
+The fastest way — `createModel()` reads from environment variables:
 
 ```ts
-// Chat Completions API
-const model = new AzureChatCompletionsModel({
-  endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-  apiKey: process.env.AZURE_OPENAI_API_KEY!,
-  deployment: "gpt-5.2",
-  apiVersion: "2025-03-01-preview", // optional, this is the default
-});
+import { createModel } from "@usestratus/sdk";
 
-// Responses API
+const model = createModel();                    // Responses API (default)
+const model = createModel("chat-completions");  // Chat Completions API
+```
+
+Or configure explicitly:
+
+```ts
+import { AzureResponsesModel } from "@usestratus/sdk";
+
 const model = new AzureResponsesModel({
-  endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
+  endpoint: "https://your-resource.openai.azure.com",
   apiKey: process.env.AZURE_OPENAI_API_KEY!,
   deployment: "gpt-5.2",
-  apiVersion: "2025-04-01-preview", // optional, this is the default
 });
 ```
 
-Both implement the same `Model` interface — swap one for the other without changing any agent, tool, or session code.
+Both models implement the same `Model` interface — swap one for the other without changing any agent, tool, or session code.
 
 ### Environment Variables
 
 ```
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_DEPLOYMENT=gpt-5.2
 ```
+
+## Testing
+
+Stratus ships test utilities as a separate entrypoint:
+
+```ts
+import { createMockModel, textResponse, toolCallResponse } from "@usestratus/sdk/testing";
+
+const model = createMockModel([
+  toolCallResponse([{ name: "search", args: { q: "test" } }]),
+  textResponse("Found 3 results"),
+]);
+
+const agent = new Agent({ name: "test", model, tools: [searchTool] });
+const result = await run(agent, "Search for test");
+expect(result.output).toBe("Found 3 results");
+
+// Capture requests for assertions
+const model = createMockModel([textResponse("ok")], { capture: true });
+await run(agent, "Hello");
+expect(model.requests[0].messages[0].content).toBe("Hello");
+```
+
+## Debug Mode
+
+Log model calls, tool executions, and handoffs to stderr:
+
+```ts
+const result = await run(agent, "Hello", { debug: true });
+// [stratus:model] 2026-04-02T... request to assistant {"messages":2,"tools":1,"turn":0}
+// [stratus:model] 2026-04-02T... response from assistant {"content":"Hi!","toolCalls":[],...}
+```
+
+Also works on sessions: `createSession({ model, debug: true })`.
 
 ## Error Handling
 
