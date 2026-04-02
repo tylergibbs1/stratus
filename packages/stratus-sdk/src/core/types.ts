@@ -142,6 +142,10 @@ export interface ModelSettings {
 	dataSources?: DataSource[];
 	/** Server-side context management (Responses API only). */
 	contextManagement?: ContextManagement;
+	/** Fields to include in the response (Responses API only). e.g. ["reasoning.encrypted_content"] */
+	include?: string[];
+	/** Run as a background task for long-running requests (Responses API only). */
+	background?: boolean;
 }
 
 export type ResponseFormat =

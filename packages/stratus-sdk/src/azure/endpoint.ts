@@ -68,3 +68,22 @@ export function resolveResponsesUrl(endpoint: string, apiVersion: string): strin
 			return `${normalized}/openai/v1/responses`;
 	}
 }
+
+/**
+ * Resolve the base URL prefix for Responses API sub-endpoints (compact, retrieve, delete, etc.).
+ * Returns the base without a trailing path so callers can append `/compact`, `/{id}`, etc.
+ */
+export function resolveResponsesBaseUrl(endpoint: string, apiVersion: string): string {
+	const normalized = endpoint.replace(/\/$/, "");
+	const kind = detectEndpointKind(normalized);
+
+	switch (kind) {
+		case "full_url":
+			// Strip any trailing sub-path so we get back to the /responses root
+			return normalized.replace(/\/responses.*$/, "/responses");
+		case "foundry":
+			return `${normalized}/openai/responses?api-version=${apiVersion}`;
+		case "standard":
+			return `${normalized}/openai/v1/responses`;
+	}
+}
