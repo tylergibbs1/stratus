@@ -16,6 +16,10 @@
     "./azure": {
       "types": "./dist/azure/index.d.ts",
       "import": "./dist/azure/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
     }
   },
   "keywords": ["azure", "openai", "agent", "ai", "llm", "typescript", "tools", "streaming"],

@@ -1,6 +1,7 @@
 import type { Agent } from "./agent";
 import { RunContext } from "./context";
 import type { CostEstimator } from "./cost";
+import { type DebugLogger, createDebugLogger } from "./debug";
 import {
 	MaxBudgetExceededError,
 	MaxTurnsExceededError,
@@ -331,6 +332,8 @@ export interface RunOptions<TContext, TOutput = undefined> {
 	 * Takes precedence over per-tool `needsApproval` and `beforeToolCall` hooks.
 	 */
 	canUseTool?: CanUseTool<TContext>;
+	/** Enable debug logging to stderr. Logs model requests/responses, tool calls, and handoffs. */
+	debug?: boolean;
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -394,6 +397,7 @@ export async function run<TContext, TOutput = undefined>(
 	const dynamicSubagents = options?.dynamicSubagents;
 	const allowedTools = options?.allowedTools;
 	const canUseToolFn = options?.canUseTool;
+	const debugLog = createDebugLogger(options?.debug);
 
 	// Fire beforeRun hook on the entry agent
 	const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -474,6 +478,12 @@ export async function run<TContext, TOutput = undefined>(
 			await runHooks.onLlmStart({ agent: currentAgent, request, context: ctx.context });
 		}
 
+		debugLog.log("model", `request to ${currentAgent.name}`, {
+			messages: messages.length,
+			tools: toolDefs.length,
+			turn,
+		});
+
 		let response: ModelResponse;
 		if (trace) {
 			const span = trace.startSpan(`model_call:${currentAgent.name}`, "model_call", {
@@ -493,6 +503,12 @@ export async function run<TContext, TOutput = undefined>(
 		} else {
 			response = await model.getResponse(request, { signal });
 		}
+
+		debugLog.log("model", `response from ${currentAgent.name}`, {
+			content: response.content?.slice(0, 200),
+			toolCalls: response.toolCalls.map((tc) => tc.function.name),
+			usage: response.usage,
+		});
 
 		// Fire onLlmEnd hooks
 		const llmEndInfo = { content: response.content, toolCallCount: response.toolCalls.length };
@@ -575,6 +591,8 @@ export async function run<TContext, TOutput = undefined>(
 			});
 		}
 
+		debugLog.log("tool", "executing", response.toolCalls.map((tc) => tc.function.name));
+
 		const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
 			currentAgent,
 			ctx,
@@ -590,6 +608,8 @@ export async function run<TContext, TOutput = undefined>(
 			canUseToolFn,
 		);
 		messages.push(...toolMessages);
+
+		debugLog.log("tool", "results", toolMessages.map((m) => String(m.content).slice(0, 100)));
 
 		// Check toolUseBehavior — should we stop instead of calling the LLM again?
 		if (await shouldStopAfterToolCalls(currentAgent, response.toolCalls, toolMessages)) {
@@ -608,6 +628,7 @@ export async function run<TContext, TOutput = undefined>(
 		}
 
 		if (handoffAgent) {
+			debugLog.log("handoff", `${currentAgent.name} → ${handoffAgent.name}`);
 			let allowHandoff = true;
 
 			// Fire beforeHandoff hook on current agent
@@ -784,6 +805,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 		const dynamicSubagents = options?.dynamicSubagents;
 		const allowedTools = options?.allowedTools;
 		const canUseToolFn = options?.canUseTool;
+		const debugLog = createDebugLogger(options?.debug);
 
 		// Fire beforeRun hook on the entry agent
 		const inputText = typeof input === "string" ? input : extractUserText(input);
@@ -893,6 +915,12 @@ async function* streamInternal<TContext, TOutput = undefined>(
 			if (runHooks?.onLlmStart) {
 				await runHooks.onLlmStart({ agent: currentAgent, request, context: ctx.context });
 			}
+
+			debugLog.log("model", `stream request to ${currentAgent.name}`, {
+				messages: messages.length,
+				tools: toolDefs.length,
+				turn,
+			});
 
 			let finalResponse: ModelResponse | undefined;
 			let gotDone = false;

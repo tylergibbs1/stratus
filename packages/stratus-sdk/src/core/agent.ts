@@ -7,6 +7,7 @@ import type { Model } from "./model";
 import type { SubAgent } from "./subagent";
 import type { ModelSettings, ResponseFormat, ToolUseBehavior } from "./types";
 import { zodToJsonSchema } from "./utils/zod";
+import { runValidation } from "./validate-agent";
 
 export type Instructions<TContext> = string | ((context: TContext) => string | Promise<string>);
 
@@ -62,6 +63,7 @@ export class Agent<TContext = unknown, TOutput = undefined> {
 		this.outputGuardrails = config.outputGuardrails ?? [];
 		this.hooks = config.hooks ?? {};
 		this.toolUseBehavior = config.toolUseBehavior ?? "run_llm_again";
+		runValidation(this);
 	}
 
 	async getSystemPrompt(context: TContext): Promise<string | undefined> {
