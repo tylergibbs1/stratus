@@ -150,6 +150,9 @@ export {
 	ToolTimeoutError,
 } from "./errors";
 
+export { validateAgent } from "./validate-agent";
+export type { ValidationResult } from "./validate-agent";
+
 export { zodToJsonSchema } from "./utils/zod";
 
 export {
