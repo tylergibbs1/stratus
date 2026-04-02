@@ -337,3 +337,53 @@ describe("session", () => {
 		expect(s1.id).not.toBe(s2.id);
 	});
 });
+
+describe("session.wait()", () => {
+	test("returns result without manual stream draining", async () => {
+		const model = mockModel([{ content: "Hello from wait!", toolCalls: [] }]);
+		const session = createSession({ model });
+
+		session.send("Hi");
+		const result = await session.wait();
+
+		expect(result.output).toBe("Hello from wait!");
+	});
+
+	test("multi-turn with wait()", async () => {
+		const model = mockModel([
+			{ content: "First", toolCalls: [] },
+			{ content: "Second", toolCalls: [] },
+		]);
+		const session = createSession({ model });
+
+		session.send("Turn 1");
+		const r1 = await session.wait();
+		expect(r1.output).toBe("First");
+
+		session.send("Turn 2");
+		const r2 = await session.wait();
+		expect(r2.output).toBe("Second");
+	});
+
+	test("throws if called without send()", async () => {
+		const model = mockModel([
+			{ content: "First", toolCalls: [] },
+		]);
+		const session = createSession({ model });
+
+		// First: normal flow
+		session.send("Hi");
+		await session.wait();
+
+		// Second: no send() before wait()
+		expect(() => session.wait()).toThrow("No new message");
+	});
+
+	test("throws on closed session", async () => {
+		const model = mockModel([{ content: "Hi", toolCalls: [] }]);
+		const session = createSession({ model });
+		session.close();
+
+		expect(() => session.wait()).toThrow("closed");
+	});
+});

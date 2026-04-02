@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
-import { run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
+import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import { createMockModel, textResponse, toolCallResponse } from "../../src/testing/index";
 
@@ -65,5 +66,31 @@ describe("debug mode", () => {
 		expect(output).toContain("executing");
 		expect(output).toContain("add");
 		expect(output).toContain("results");
+	});
+
+	test("logs with stream()", async () => {
+		const model = createMockModel([textResponse("Streamed!")]);
+		const agent = new Agent({ name: "streamer", model });
+
+		const { stream: s, result } = stream(agent, "Hi", { debug: true });
+		for await (const _event of s) {
+			// drain
+		}
+		await result;
+
+		const output = stderrOutput.join("");
+		expect(output).toContain("[stratus:model]");
+		expect(output).toContain("stream request to streamer");
+	});
+
+	test("logs with session debug option", async () => {
+		const model = createMockModel([textResponse("Session debug!")]);
+		const session = createSession({ model, debug: true });
+
+		session.send("Hi");
+		await session.wait();
+
+		const output = stderrOutput.join("");
+		expect(output).toContain("[stratus:model]");
 	});
 });

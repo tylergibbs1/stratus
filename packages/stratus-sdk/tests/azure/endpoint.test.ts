@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	detectEndpointKind,
 	resolveChatCompletionsUrl,
+	resolveResponsesBaseUrl,
 	resolveResponsesUrl,
 } from "../../src/azure/endpoint";
 
@@ -121,6 +122,49 @@ describe("resolveResponsesUrl", () => {
 
 	test("trailing slash normalized", () => {
 		const url = resolveResponsesUrl("https://myresource.openai.azure.com/", "2025-04-01-preview");
+		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
+	});
+});
+
+describe("resolveResponsesBaseUrl", () => {
+	test("standard endpoint", () => {
+		const url = resolveResponsesBaseUrl(
+			"https://myresource.openai.azure.com",
+			"2025-04-01-preview",
+		);
+		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
+	});
+
+	test("foundry endpoint includes api-version", () => {
+		const url = resolveResponsesBaseUrl(
+			"https://myproject.services.ai.azure.com",
+			"2025-04-01-preview",
+		);
+		expect(url).toContain("api-version=2025-04-01-preview");
+		expect(url).toContain("/openai/responses");
+	});
+
+	test("full_url with /responses strips trailing path", () => {
+		const url = resolveResponsesBaseUrl(
+			"https://myresource.openai.azure.com/openai/v1/responses",
+			"ignored",
+		);
+		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
+	});
+
+	test("full_url without /responses falls back to standard format", () => {
+		const url = resolveResponsesBaseUrl(
+			"https://myresource.openai.azure.com/openai/deployments/gpt-4o/chat/completions",
+			"ignored",
+		);
+		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
+	});
+
+	test("full_url with /openai/deployments/ but no /responses falls back", () => {
+		const url = resolveResponsesBaseUrl(
+			"https://myresource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-03-01",
+			"ignored",
+		);
 		expect(url).toBe("https://myresource.openai.azure.com/openai/v1/responses");
 	});
 });

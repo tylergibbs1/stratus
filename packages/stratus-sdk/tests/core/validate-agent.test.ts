@@ -108,4 +108,26 @@ describe("Agent constructor validation", () => {
 		expect(agent.name).toBe("good");
 		expect(agent.tools).toHaveLength(2);
 	});
+
+	test("detects collision between hosted tool and function tool with same name", () => {
+		const hostedTool = {
+			type: "hosted" as const,
+			name: "web_search_preview",
+			definition: { type: "web_search_preview" },
+		};
+		const functionTool = dummyTool("web_search_preview");
+
+		expect(
+			() =>
+				new Agent({
+					name: "collision",
+					tools: [hostedTool, functionTool],
+				}),
+		).toThrow("Duplicate tool name");
+	});
+
+	test("agent with no tools validates cleanly", () => {
+		const agent = new Agent({ name: "empty" });
+		expect(agent.tools).toHaveLength(0);
+	});
 });
