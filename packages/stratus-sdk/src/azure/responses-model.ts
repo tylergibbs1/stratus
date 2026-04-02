@@ -73,7 +73,7 @@ export interface InputItemList {
 
 export interface McpApprovalResponseItem {
 	type: "mcp_approval_response";
-	approvalRequestId: string;
+	approval_request_id: string;
 	approve: boolean;
 }
 
@@ -459,6 +459,16 @@ export class AzureResponsesModel implements Model {
 				if (resp?.usage) usage = parseResponsesUsage(resp.usage);
 				finishReason = mapStatus(resp?.status);
 			}
+			if (event.type === "response.failed") {
+				const errorMsg = event.response?.error?.message ?? "Response failed";
+				throw new ModelError(`Azure API response failed: ${errorMsg}`, { status: 200 });
+			}
+			if (event.type === "error") {
+				const err = event.error;
+				const errorType = err?.type ?? "unknown";
+				const errorMsg = err?.message ?? "Unknown error";
+				throw new ModelError(`Azure API stream error (${errorType}): ${errorMsg}`, { status: 200 });
+			}
 		}
 
 		const finalToolCalls: ToolCall[] = Array.from(toolCalls.values()).map((tc) => ({
@@ -520,6 +530,7 @@ export class AzureResponsesModel implements Model {
 		const response = await fetch(url, {
 			method: "POST",
 			headers: { "Content-Type": "application/json", ...authHeaders },
+			body: JSON.stringify({}),
 			signal: options?.signal,
 		});
 		if (!response.ok) {

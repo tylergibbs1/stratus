@@ -79,8 +79,13 @@ export function resolveResponsesBaseUrl(endpoint: string, apiVersion: string): s
 
 	switch (kind) {
 		case "full_url":
-			// Strip any trailing sub-path so we get back to the /responses root
-			return normalized.replace(/\/responses.*$/, "/responses");
+			// If the URL contains /responses, strip everything after it.
+			// Otherwise it's a non-responses full_url (e.g. /openai/deployments/...) —
+			// fall through to standard format since sub-endpoints need the /responses base.
+			if (normalized.includes("/responses")) {
+				return normalized.replace(/\/responses.*$/, "/responses");
+			}
+			return `${new URL(normalized).origin}/openai/v1/responses`;
 		case "foundry":
 			return `${normalized}/openai/responses?api-version=${apiVersion}`;
 		case "standard":
