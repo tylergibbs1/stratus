@@ -13,15 +13,15 @@
 [![npm version](https://img.shields.io/npm/v/@usestratus/sdk)](https://www.npmjs.com/package/@usestratus/sdk)
 [![CI](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml)
 
-A better TypeScript agent SDK for Azure OpenAI. Build multi-agent systems with tools, handoffs, guardrails, streaming, structured output, and more.
+A TypeScript agent SDK purpose-built for Azure OpenAI.
 
-- **Built for Azure, not bolted on** — auto-endpoint detection, Entra ID auth, content filter errors as typed exceptions, and built-in retry. No 404 config spirals, no "which SDK do I use" confusion.
-- **Two API backends, one interface** — Chat Completions and Responses API through the same agent, tool, and session code. Start with one, switch with a single line.
-- **Multi-agent orchestration** — handoffs, subagents, guardrails, and hooks compose through a single run loop. Hooks can deny or modify tool calls at runtime.
-- **Human-in-the-loop** — `canUseTool` permission callbacks, `needsApproval` per tool, `allowedTools` glob filtering, and graceful `interrupt()` for stopping runs mid-flight.
-- **Client-side state you control** — save, resume, and fork conversations as portable JSON snapshots. Hot-swap tools mid-session. No server-side threads, no opaque session IDs.
-- **Type-safe from schema to output** — Zod schemas drive tool parameters, structured output, and validation. Context types flow through agents, hooks, and guardrails at compile time.
-- **Zero dependencies** — only Zod as a peer dep. No transitive dependency sprawl, no framework lock-in.
+- **One line to start** — `createModel()` reads your env vars. No config objects, no API version guessing.
+- **One interface, two backends** — Chat Completions and Responses API through the same agent, tool, and session code.
+- **Agents that compose** — handoffs, subagents, guardrails, and hooks in a single run loop. Deny or modify tool calls at runtime.
+- **Human-in-the-loop** — permission callbacks, per-tool approval, glob-filtered tools, and graceful mid-run interrupts.
+- **State you own** — save, resume, and fork conversations as JSON. No server-side threads.
+- **Type-safe end to end** — Zod schemas drive parameters, structured output, and validation. Types flow through agents, hooks, and guardrails at compile time.
+- **Zero dep** — only Zod as a peer dep.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
 
