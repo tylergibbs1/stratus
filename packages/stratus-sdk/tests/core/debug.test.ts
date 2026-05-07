@@ -11,7 +11,6 @@ const originalWrite = process.stderr.write;
 
 beforeEach(() => {
 	stderrOutput = [];
-	// @ts-expect-error -- mock
 	process.stderr.write = (chunk: string) => {
 		stderrOutput.push(chunk);
 		return true;

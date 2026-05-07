@@ -13,11 +13,19 @@ export interface PendingToolCall {
 export class InterruptedRunResult<TOutput = undefined> {
 	readonly interrupted = true as const;
 	readonly pendingToolCalls: PendingToolCall[];
+	readonly output = "";
+	readonly finalOutput: TOutput extends undefined ? undefined : TOutput;
 	readonly messages: ChatMessage[];
 	readonly currentAgent: Agent<any, TOutput>;
+	readonly lastAgent: Agent<any, TOutput>;
 	readonly context: any;
 	readonly numTurns: number;
-	readonly usage: UsageInfo | undefined;
+	readonly usage: UsageInfo;
+	readonly finishReason: FinishReason = "tool_calls";
+	readonly totalCostUsd = 0;
+	readonly responseId?: string;
+	readonly inputGuardrailResults: readonly GuardrailRunResult[] = [];
+	readonly outputGuardrailResults: readonly GuardrailRunResult[] = [];
 
 	constructor(options: {
 		pendingToolCalls: PendingToolCall[];
@@ -28,11 +36,22 @@ export class InterruptedRunResult<TOutput = undefined> {
 		usage?: UsageInfo;
 	}) {
 		this.pendingToolCalls = options.pendingToolCalls;
+		this.finalOutput = undefined as TOutput extends undefined ? undefined : TOutput;
 		this.messages = options.messages;
 		this.currentAgent = options.currentAgent;
+		this.lastAgent = options.currentAgent;
 		this.context = options.context;
 		this.numTurns = options.numTurns;
-		this.usage = options.usage;
+		this.usage = options.usage ?? {
+			promptTokens: 0,
+			completionTokens: 0,
+			totalTokens: 0,
+		};
+	}
+
+	/** Convert the result's messages into a format suitable for chaining as input to another run */
+	toInputList(): ChatMessage[] {
+		return this.messages.filter((m) => m.role !== "system");
 	}
 }
 

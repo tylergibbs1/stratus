@@ -109,7 +109,11 @@ describe("dynamic subagents", () => {
 		// Verify the tool definition was sent to the model
 		const request = parentModel.requests[0]!;
 		expect(request.tools).toBeDefined();
-		const toolDef = request.tools!.find((t) => "function" in t && t.function.name === "ask_helper");
+		const toolDef = request.tools!.find(
+			(t) =>
+				t.type === "function" &&
+				(t as { function: { name: string } }).function.name === "ask_helper",
+		);
 		expect(toolDef).toBeDefined();
 	});
 
@@ -158,7 +162,9 @@ describe("dynamic subagents", () => {
 
 		// Both subagent tools should appear in the request
 		const request = parentModel.requests[0]!;
-		const toolNames = request.tools!.map((t) => ("function" in t ? t.function.name : ""));
+		const toolNames = request.tools!.map((t) =>
+			t.type === "function" ? (t as { function: { name: string } }).function.name : "",
+		);
 		expect(toolNames).toContain("run_static_child");
 		expect(toolNames).toContain("run_dynamic_child");
 

@@ -11,7 +11,7 @@ import type {
 import type { AgentHooks, RunHooks } from "./hooks";
 import type { AgentTool } from "./hosted-tool";
 import type { Model, StreamEvent } from "./model";
-import type { RunResult } from "./result";
+import type { InterruptedRunResult, RunResult } from "./result";
 import { stream as coreStream } from "./run";
 import type { CallModelInputFilter, CanUseTool, ToolErrorFormatter } from "./run";
 import type { SubAgent } from "./subagent";
@@ -99,7 +99,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 	private readonly _store: SessionStore | undefined;
 	private readonly _onStateChange: SessionStateChangeListener | undefined;
 	private _messages: ChatMessage[] = [];
-	private _resultPromise: Promise<RunResult<TOutput>> | null = null;
+	private _resultPromise: Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> | null = null;
 	private _streaming = false;
 	private _closed = false;
 	private _started = false;
@@ -160,7 +160,9 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		return this._streamInternal(options?.signal);
 	}
 
-	async wait(options?: { signal?: AbortSignal }): Promise<RunResult<TOutput>> {
+	async wait(options?: {
+		signal?: AbortSignal;
+	}): Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> {
 		if (this._resultPromise && !this._streaming) {
 			throw new StratusError("No new message to process. Call send() before wait().");
 		}
@@ -170,7 +172,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 		return this.result;
 	}
 
-	get result(): Promise<RunResult<TOutput>> {
+	get result(): Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> {
 		if (!this._resultPromise) {
 			throw new StratusError("No pending result. Call stream() first.");
 		}
@@ -264,7 +266,7 @@ export class Session<TContext = unknown, TOutput = undefined> {
 				debug: this._debug,
 			});
 
-			this._resultPromise = resultPromise.then((result) => {
+			const sessionResultPromise = resultPromise.then((result) => {
 				const oldLength = this._messages.length;
 				this._messages = result.messages.filter((m) => m.role !== "system");
 				// Emit message_added for new messages beyond what we already had
@@ -275,8 +277,9 @@ export class Session<TContext = unknown, TOutput = undefined> {
 				}
 				return result;
 			});
+			this._resultPromise = sessionResultPromise;
 			// Prevent unhandled rejection if user doesn't await .result
-			this._resultPromise.catch(() => {});
+			sessionResultPromise.catch(() => {});
 
 			for await (const event of s) {
 				yield event;
@@ -346,7 +349,7 @@ export async function loadSession<TContext = unknown, TOutput = undefined>(
 export async function prompt<TContext = unknown, TOutput = undefined>(
 	input: string | ContentPart[],
 	config: SessionConfig<TContext, TOutput>,
-): Promise<RunResult<TOutput>> {
+): Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>> {
 	const session = createSession(config);
 	session.send(input);
 

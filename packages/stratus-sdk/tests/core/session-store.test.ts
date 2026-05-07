@@ -112,7 +112,7 @@ describe("loadSession", () => {
 			id: "sess-restore",
 			messages: [
 				{ role: "user", content: "previous message" },
-				{ role: "assistant", content: "previous reply", toolCalls: [] },
+				{ role: "assistant", content: "previous reply", tool_calls: [] },
 			],
 		};
 		await store.save("sess-restore", snapshot);

@@ -1,7 +1,7 @@
 import type { Agent } from "./agent";
 import { RunContext } from "./context";
 import type { CostEstimator } from "./cost";
-import { type DebugLogger, createDebugLogger } from "./debug";
+import { createDebugLogger } from "./debug";
 import {
 	MaxBudgetExceededError,
 	MaxTurnsExceededError,
@@ -116,7 +116,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function extractToolCallDecision(
-	result: undefined | ToolCallDecision | undefined,
+	result: void | ToolCallDecision | undefined,
 ): ToolCallDecision | undefined {
 	if (result && typeof result === "object" && "decision" in result) {
 		return result;
@@ -125,7 +125,7 @@ function extractToolCallDecision(
 }
 
 function extractHandoffDecision(
-	result: undefined | HandoffDecision | undefined,
+	result: void | HandoffDecision | undefined,
 ): HandoffDecision | undefined {
 	if (result && typeof result === "object" && "decision" in result) {
 		return result;
@@ -591,7 +591,11 @@ export async function run<TContext, TOutput = undefined>(
 			});
 		}
 
-		debugLog.log("tool", "executing", response.toolCalls.map((tc) => tc.function.name));
+		debugLog.log(
+			"tool",
+			"executing",
+			response.toolCalls.map((tc) => tc.function.name),
+		);
 
 		const { toolMessages, handoffAgent } = await executeToolCallsWithHandoffs(
 			currentAgent,
@@ -609,7 +613,11 @@ export async function run<TContext, TOutput = undefined>(
 		);
 		messages.push(...toolMessages);
 
-		debugLog.log("tool", "results", toolMessages.map((m) => String(m.content).slice(0, 100)));
+		debugLog.log(
+			"tool",
+			"results",
+			toolMessages.map((m) => String(m.content).slice(0, 100)),
+		);
 
 		// Check toolUseBehavior — should we stop instead of calling the LLM again?
 		if (await shouldStopAfterToolCalls(currentAgent, response.toolCalls, toolMessages)) {
@@ -736,12 +744,11 @@ export async function run<TContext, TOutput = undefined>(
 	throw new MaxTurnsExceededError(maxTurns);
 }
 
-export interface StreamOptions<TContext, TOutput = undefined>
-	extends RunOptions<TContext, TOutput> {}
+export type StreamOptions<TContext, TOutput = undefined> = RunOptions<TContext, TOutput>;
 
 export interface StreamedRunResult<TOutput = undefined> {
 	stream: AsyncGenerator<StreamEvent>;
-	result: Promise<RunResult<TOutput>>;
+	result: Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>>;
 	/**
 	 * Gracefully interrupt the run. The current model call or tool execution
 	 * will finish, then the run returns a partial RunResult with what has been
@@ -755,12 +762,14 @@ export function stream<TContext, TOutput = undefined>(
 	input: string | ChatMessage[],
 	options?: StreamOptions<TContext, TOutput>,
 ): StreamedRunResult<TOutput> {
-	let resolveResult: (result: RunResult<TOutput>) => void;
+	let resolveResult: (result: RunResult<TOutput> | InterruptedRunResult<TOutput>) => void;
 	let rejectResult: (error: unknown) => void;
-	const resultPromise = new Promise<RunResult<TOutput>>((resolve, reject) => {
-		resolveResult = resolve;
-		rejectResult = reject;
-	});
+	const resultPromise = new Promise<RunResult<TOutput> | InterruptedRunResult<TOutput>>(
+		(resolve, reject) => {
+			resolveResult = resolve;
+			rejectResult = reject;
+		},
+	);
 
 	let interruptRequested = false;
 	const interruptFn = () => {
@@ -777,7 +786,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 	agent: Agent<TContext, TOutput>,
 	input: string | ChatMessage[],
 	options: StreamOptions<TContext, TOutput> | undefined,
-	resolveResult: (result: RunResult<TOutput>) => void,
+	resolveResult: (result: RunResult<TOutput> | InterruptedRunResult<TOutput>) => void,
 	rejectResult: (error: unknown) => void,
 	isInterrupted?: () => boolean,
 ): AsyncGenerator<StreamEvent> {
@@ -1024,7 +1033,7 @@ async function* streamInternal<TContext, TOutput = undefined>(
 					numTurns: ctx.numTurns,
 					usage: ctx.usage,
 				});
-				resolveResult(interrupted as unknown as RunResult<TOutput>);
+				resolveResult(interrupted);
 				return;
 			}
 

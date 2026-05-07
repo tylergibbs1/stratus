@@ -4,7 +4,7 @@ import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MemorySessionStore } from "../../src/core/memory-store";
 import { run, stream, resumeRun } from "../../src/core/run";
-import { createSession } from "../../src/core/session";
+import { createSession, type SessionStore } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 
@@ -95,7 +95,8 @@ describe("needsApproval edge cases (real API)", () => {
 		const agent = new Agent({
 			name: "payments",
 			model,
-			instructions: "Process payments using the process_payment tool. Always call it with the exact amount given.",
+			instructions:
+				"Process payments using the process_payment tool. Always call it with the exact amount given.",
 			tools: [payTool],
 		});
 
@@ -171,7 +172,7 @@ describe("tool retry edge cases (real API)", () => {
 					return true;
 				},
 			},
-			execute: async (_ctx, { query }) => {
+			execute: async (_ctx, { query: _query }) => {
 				callCount++;
 				throw new Error("client error: invalid query format");
 			},
@@ -217,7 +218,7 @@ describe("tool retry edge cases (real API)", () => {
 			tools: [timedTool],
 		});
 
-		const result = await run(agent, "Search test");
+		await run(agent, "Search test");
 		expect(timestamps.length).toBe(3); // 1 original + 2 retries
 
 		// Check delays: first ~200ms, second ~400ms
@@ -232,7 +233,7 @@ describe("session persistence edge cases (real API)", () => {
 	test("session NOT saved when stream errors", async () => {
 		const store = new MemorySessionStore();
 		let saveCount = 0;
-		const trackingStore: typeof store = {
+		const trackingStore: SessionStore = {
 			save: async (id, snapshot) => {
 				saveCount++;
 				return store.save(id, snapshot);
@@ -252,10 +253,10 @@ describe("session persistence edge cases (real API)", () => {
 		});
 
 		session.send("Hello");
-		for await (const event of session.stream()) {
+		for await (const _event of session.stream()) {
 			// consume
 		}
-		const result = await session.result;
+		await session.result;
 
 		// Should have saved (successful stream)
 		expect(saveCount).toBeGreaterThan(0);
@@ -273,7 +274,7 @@ describe("session persistence edge cases (real API)", () => {
 		});
 
 		session1.send("My favorite color is purple. Remember this.");
-		for await (const event of session1.stream()) {
+		for await (const _event of session1.stream()) {
 			// consume
 		}
 
@@ -286,7 +287,7 @@ describe("session persistence edge cases (real API)", () => {
 
 		expect(session2).toBeDefined();
 		session2!.send("What is my favorite color? Reply with just the color.");
-		for await (const event of session2!.stream()) {
+		for await (const _event of session2!.stream()) {
 			// consume
 		}
 		const result = await session2!.result;
@@ -363,7 +364,8 @@ describe("dynamic subagent edge cases (real API)", () => {
 		const parentAgent = new Agent({
 			name: "shopping-assistant",
 			model,
-			instructions: "Help users shop. Use lookup_price to find prices. Use get_advice for recommendations.",
+			instructions:
+				"Help users shop. Use lookup_price to find prices. Use get_advice for recommendations.",
 			tools: [lookupTool],
 		});
 

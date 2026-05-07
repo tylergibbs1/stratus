@@ -13,12 +13,7 @@ let capturedUrl: string | null = null;
 let capturedMethod: string | null = null;
 let capturedBody: Record<string, unknown> | null = null;
 
-function mockFetch(response: {
-	ok?: boolean;
-	status?: number;
-	json?: unknown;
-	headers?: Headers;
-}) {
+function mockFetch(response: { ok?: boolean; status?: number; json?: unknown; headers?: Headers }) {
 	capturedUrl = null;
 	capturedMethod = null;
 	capturedBody = null;
@@ -130,6 +125,7 @@ describe("createBackgroundResponse()", () => {
 		});
 
 		expect(capturedBody!.background).toBe(true);
+		expect(capturedBody!.store).toBe(true);
 		expect(result.id).toBe("resp_bg_123");
 		expect(result.status).toBe("queued");
 	});
@@ -147,6 +143,23 @@ describe("createBackgroundResponse()", () => {
 
 		expect(capturedBody!.stream).toBe(true);
 		expect(capturedBody!.background).toBe(true);
+		expect(capturedBody!.store).toBe(true);
+	});
+
+	test("includes previous_response_id after forcing store for background mode", async () => {
+		mockFetch({
+			json: { id: "resp_bg_789", status: "queued", output: [] },
+		});
+
+		const model = new AzureResponsesModel(config);
+		await model.createBackgroundResponse({
+			messages: [{ role: "user", content: "continue" }],
+			previousResponseId: "resp_previous",
+		});
+
+		expect(capturedBody!.background).toBe(true);
+		expect(capturedBody!.store).toBe(true);
+		expect(capturedBody!.previous_response_id).toBe("resp_previous");
 	});
 });
 
@@ -242,6 +255,7 @@ describe("background parameter via modelSettings", () => {
 		});
 
 		expect(capturedBody!.background).toBe(true);
+		expect(capturedBody!.store).toBe(true);
 	});
 });
 

@@ -91,7 +91,11 @@ describe("background: async agent workflow", () => {
 		// Poll until terminal state
 		let response = bg;
 		const start = Date.now();
-		while (response.status !== "completed" && response.status !== "failed" && response.status !== "cancelled") {
+		while (
+			response.status !== "completed" &&
+			response.status !== "failed" &&
+			response.status !== "cancelled"
+		) {
 			if (Date.now() - start > 90_000) break;
 			await new Promise((r) => setTimeout(r, 2000));
 			response = await storedModel.retrieveResponse(response.id);
@@ -199,7 +203,7 @@ describe("CRUD: full lifecycle through agent run", () => {
 
 		// Retrieve
 		const retrieved = await storedModel.retrieveResponse(resp.responseId!);
-		expect(retrieved.id).toBe(resp.responseId);
+		expect(retrieved.id).toBe(resp.responseId!);
 		expect(retrieved.status).toBe("completed");
 
 		// List input items

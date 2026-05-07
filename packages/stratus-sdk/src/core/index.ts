@@ -34,7 +34,16 @@ export { tool, toolToDefinition } from "./tool";
 export type { FunctionTool, ToolExecuteOptions } from "./tool";
 
 export { McpClient } from "./mcp-client";
-export type { McpClientConfig, McpToolDefinition } from "./mcp-client";
+export { azureMcpHeaders } from "./mcp-client";
+export type { McpClientConfig, McpHeaders, McpToolDefinition, McpToolFilter } from "./mcp-client";
+
+export { LocalSandbox, SandboxAgent } from "./sandbox";
+export type {
+	CommandResult,
+	LocalSandboxOptions,
+	SandboxAgentConfig,
+	SandboxWorkspace,
+} from "./sandbox";
 
 export { isHostedTool, isFunctionTool } from "./hosted-tool";
 export type { HostedTool, AgentTool } from "./hosted-tool";
@@ -91,8 +100,17 @@ export type {
 	AfterToolCallHook,
 } from "./hooks";
 
-export { TraceContext, getCurrentTrace, withTrace } from "./tracing";
-export type { Span, Trace } from "./tracing";
+export {
+	AzureMonitorTraceExporter,
+	TraceContext,
+	addTraceProcessor,
+	clearTraceProcessors,
+	createAzureMonitorTraceExporter,
+	getCurrentTrace,
+	setTraceProcessors,
+	withTrace,
+} from "./tracing";
+export type { AzureMonitorTraceExporterConfig, Span, Trace, TraceProcessor } from "./tracing";
 
 export { createCostEstimator } from "./cost";
 export type { CostEstimator, PricingConfig } from "./cost";

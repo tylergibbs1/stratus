@@ -10,6 +10,8 @@ export type ToolCallDecision =
 	| { decision: "modify"; modifiedParams: Record<string, unknown> };
 
 export type HandoffDecision = { decision: "allow" } | { decision: "deny"; reason?: string };
+type HookResult<T = void> = T | Promise<T>;
+type NotificationHookResult = unknown | Promise<unknown>;
 
 export type ToolMatcher = string | RegExp;
 
@@ -19,7 +21,7 @@ export interface MatchedToolCallHook<TContext = unknown> {
 		agent: Agent<TContext, any>;
 		toolCall: ToolCall;
 		context: TContext;
-	}) => undefined | ToolCallDecision | Promise<undefined | ToolCallDecision>;
+	}) => HookResult<void | ToolCallDecision | undefined>;
 }
 
 export interface MatchedAfterToolCallHook<TContext = unknown> {
@@ -29,7 +31,7 @@ export interface MatchedAfterToolCallHook<TContext = unknown> {
 		toolCall: ToolCall;
 		result: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 }
 
 export type BeforeToolCallHook<TContext = unknown> =
@@ -37,7 +39,7 @@ export type BeforeToolCallHook<TContext = unknown> =
 			agent: Agent<TContext, any>;
 			toolCall: ToolCall;
 			context: TContext;
-	  }) => undefined | ToolCallDecision | Promise<undefined | ToolCallDecision>)
+	  }) => HookResult<void | ToolCallDecision | undefined>)
 	| MatchedToolCallHook<TContext>[];
 
 export type AfterToolCallHook<TContext = unknown> =
@@ -46,7 +48,7 @@ export type AfterToolCallHook<TContext = unknown> =
 			toolCall: ToolCall;
 			result: string;
 			context: TContext;
-	  }) => void | Promise<void>)
+	  }) => NotificationHookResult)
 	| MatchedAfterToolCallHook<TContext>[];
 
 export interface AgentHooks<TContext = unknown> {
@@ -54,13 +56,13 @@ export interface AgentHooks<TContext = unknown> {
 		agent: Agent<TContext, any>;
 		input: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	afterRun?: (params: {
 		agent: Agent<TContext, any>;
 		result: RunResult<any>;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	beforeToolCall?: BeforeToolCallHook<TContext>;
 
@@ -70,48 +72,44 @@ export interface AgentHooks<TContext = unknown> {
 		fromAgent: Agent<TContext, any>;
 		toAgent: Agent<TContext, any>;
 		context: TContext;
-	}) => undefined | HandoffDecision | Promise<undefined | HandoffDecision>;
+	}) => HookResult<void | HandoffDecision | undefined>;
 
 	onStop?: (params: {
 		agent: Agent<TContext, any>;
 		context: TContext;
 		reason: "max_turns" | "max_budget";
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	onSubagentStart?: (params: {
 		agent: Agent<TContext, any>;
 		subagent: SubAgent;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	onSubagentStop?: (params: {
 		agent: Agent<TContext, any>;
 		subagent: SubAgent;
 		result: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
-	onSessionStart?: (params: {
-		context: TContext;
-	}) => void | Promise<void>;
+	onSessionStart?: (params: { context: TContext }) => NotificationHookResult;
 
-	onSessionEnd?: (params: {
-		context: TContext;
-	}) => void | Promise<void>;
+	onSessionEnd?: (params: { context: TContext }) => NotificationHookResult;
 
 	/** Called before each LLM API call */
 	onLlmStart?: (params: {
 		agent: Agent<TContext, any>;
 		messages: ChatMessage[];
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called after each LLM API call */
 	onLlmEnd?: (params: {
 		agent: Agent<TContext, any>;
 		response: { content: string | null; toolCallCount: number };
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 }
 
 /** Run-level hooks that fire across all agents in a run */
@@ -120,28 +118,28 @@ export interface RunHooks<TContext = unknown> {
 	onAgentStart?: (params: {
 		agent: Agent<TContext, any>;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called when an agent finishes (before handoff or at end) */
 	onAgentEnd?: (params: {
 		agent: Agent<TContext, any>;
 		output: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called on every handoff */
 	onHandoff?: (params: {
 		fromAgent: Agent<TContext, any>;
 		toAgent: Agent<TContext, any>;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called before every tool execution */
 	onToolStart?: (params: {
 		agent: Agent<TContext, any>;
 		toolName: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called after every tool execution */
 	onToolEnd?: (params: {
@@ -149,19 +147,19 @@ export interface RunHooks<TContext = unknown> {
 		toolName: string;
 		result: string;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called before every LLM API call */
 	onLlmStart?: (params: {
 		agent: Agent<TContext, any>;
 		request: ModelRequest;
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 
 	/** Called after every LLM API call */
 	onLlmEnd?: (params: {
 		agent: Agent<TContext, any>;
 		response: { content: string | null; toolCallCount: number };
 		context: TContext;
-	}) => void | Promise<void>;
+	}) => NotificationHookResult;
 }

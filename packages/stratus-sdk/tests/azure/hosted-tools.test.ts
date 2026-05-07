@@ -3,6 +3,9 @@ import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-mode
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { StratusError } from "../../src/core/errors";
 
+const asFetch = (fn: (input: string | URL | Request, init?: RequestInit) => Promise<Response>) =>
+	fn as unknown as typeof fetch;
+
 describe("AzureChatCompletionsModel hosted tool rejection", () => {
 	test("throws StratusError when hosted tool is provided", async () => {
 		const model = new AzureChatCompletionsModel({
@@ -52,7 +55,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = asFetch(async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -61,7 +64,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({
@@ -85,7 +88,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = asFetch(async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -94,7 +97,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({
@@ -131,7 +134,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = asFetch(async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -140,7 +143,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({
@@ -179,7 +182,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = asFetch(async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -189,7 +192,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({
@@ -214,7 +217,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 		let capturedBody: Record<string, unknown> | undefined;
 
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+		globalThis.fetch = asFetch(async (_input: string | URL | Request, init?: RequestInit) => {
 			capturedBody = JSON.parse(init?.body as string);
 			return new Response(
 				JSON.stringify({
@@ -224,7 +227,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({
@@ -246,7 +249,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 
 	test("responseId extracted from non-streaming response", async () => {
 		const originalFetch = globalThis.fetch;
-		globalThis.fetch = async () => {
+		globalThis.fetch = asFetch(async () => {
 			return new Response(
 				JSON.stringify({
 					id: "resp_abc123",
@@ -255,7 +258,7 @@ describe("AzureResponsesModel toolChoice conversion", () => {
 				}),
 				{ status: 200 },
 			);
-		};
+		});
 
 		try {
 			const model = new AzureResponsesModel({

@@ -119,8 +119,14 @@ describe("handoffs", () => {
 		await run(agentA, "Hi");
 
 		expect(capturedRequest?.tools).toHaveLength(2);
-		expect(capturedRequest?.tools?.[0]?.function.name).toBe("greet");
-		expect(capturedRequest?.tools?.[1]?.function.name).toBe("transfer_to_agent_b");
+		expect(
+			capturedRequest?.tools?.[0]?.type === "function" &&
+				(capturedRequest.tools[0] as { function: { name: string } }).function.name,
+		).toBe("greet");
+		expect(
+			capturedRequest?.tools?.[1]?.type === "function" &&
+				(capturedRequest.tools[1] as { function: { name: string } }).function.name,
+		).toBe("transfer_to_agent_b");
 	});
 
 	test("custom handoff name and description", async () => {

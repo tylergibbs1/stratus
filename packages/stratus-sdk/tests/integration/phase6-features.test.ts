@@ -66,8 +66,8 @@ const disabledTool = tool({
 	isEnabled: false,
 });
 
-describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
-	test("tool timeout produces error message and model recovers", { timeout: 60000 }, async () => {
+describe("Phase 6 Integration: Chat Completions", () => {
+	test("tool timeout produces error message and model recovers", async () => {
 		let timeoutDetected = false;
 		const agent = new Agent({
 			name: "timeout-test",
@@ -95,7 +95,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(result.output).toBeTruthy();
 	});
 
-	test("isEnabled=false excludes tool from API call", { timeout: 60000 }, async () => {
+	test("isEnabled=false excludes tool from API call", async () => {
 		let capturedToolNames: string[] = [];
 
 		const agent = new Agent({
@@ -119,7 +119,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(capturedToolNames).not.toContain("disabled_tool");
 	});
 
-	test("RunHooks fire correctly", { timeout: 60000 }, async () => {
+	test("RunHooks fire correctly", async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
 			onAgentStart: async ({ agent }) => {
@@ -150,7 +150,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(events).toContain("agent_end:hooks-agent");
 	});
 
-	test("RunHooks with tool calls", { timeout: 60000 }, async () => {
+	test("RunHooks with tool calls", async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
 			onToolStart: async ({ toolName }) => {
@@ -182,7 +182,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(events).toContain("tool_end:get_weather");
 	});
 
-	test("AgentHooks onLlmStart and onLlmEnd", { timeout: 60000 }, async () => {
+	test("AgentHooks onLlmStart and onLlmEnd", async () => {
 		const events: string[] = [];
 		const agent = new Agent({
 			name: "llm-hooks",
@@ -204,7 +204,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(events.some((e) => e.startsWith("llm_end:"))).toBe(true);
 	});
 
-	test("guardrail results on RunResult", { timeout: 60000 }, async () => {
+	test("guardrail results on RunResult", async () => {
 		const agent = new Agent({
 			name: "guardrail-results",
 			model: chatModel,
@@ -230,7 +230,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(result.outputGuardrailResults[0]!.guardrailName).toBe("output-guard");
 	});
 
-	test("errorHandlers.maxTurns returns graceful result", { timeout: 60000 }, async () => {
+	test("errorHandlers.maxTurns returns graceful result", async () => {
 		const loopingTool = tool({
 			name: "loop_tool",
 			description: "Call this tool every time",
@@ -267,7 +267,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(result.output).toBe("Reached max turns gracefully");
 	});
 
-	test("toInputList filters system messages", { timeout: 60000 }, async () => {
+	test("toInputList filters system messages", async () => {
 		const agent = new Agent({
 			name: "input-list",
 			model: chatModel,
@@ -280,7 +280,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(inputList.length).toBeGreaterThan(0);
 	});
 
-	test("new ModelSettings fields work with Chat Completions", { timeout: 60000 }, async () => {
+	test("new ModelSettings fields work with Chat Completions", async () => {
 		const agent = new Agent({
 			name: "settings-test",
 			model: chatModel,
@@ -296,7 +296,7 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 		expect(result.output).toBeTruthy();
 	});
 
-	test("streaming with RunHooks", { timeout: 60000 }, async () => {
+	test("streaming with RunHooks", async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
 			onAgentStart: async () => {
@@ -334,8 +334,8 @@ describe("Phase 6 Integration: Chat Completions", { timeout: 60000 }, () => {
 	});
 });
 
-describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
-	test("new ModelSettings fields work with Responses API", { timeout: 60000 }, async () => {
+describe("Phase 6 Integration: Responses API", () => {
+	test("new ModelSettings fields work with Responses API", async () => {
 		const agent = new Agent({
 			name: "responses-settings",
 			model: responsesModel,
@@ -350,7 +350,7 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		expect(result.output).toBeTruthy();
 	});
 
-	test("RunHooks fire with Responses API", { timeout: 60000 }, async () => {
+	test("RunHooks fire with Responses API", async () => {
 		const events: string[] = [];
 		const hooks: RunHooks = {
 			onAgentStart: async ({ agent }) => {
@@ -381,7 +381,7 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		expect(events).toContain("end:responses-hooks");
 	});
 
-	test("tool guardrails with real API", { timeout: 60000 }, async () => {
+	test("tool guardrails with real API", async () => {
 		const blockedTools: string[] = [];
 		const toolInputGuardrails: ToolInputGuardrail[] = [
 			{
@@ -413,7 +413,7 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		expect(blockedTools).toContain("get_weather:Tokyo");
 	});
 
-	test("handoff with inputFilter", { timeout: 60000 }, async () => {
+	test("handoff with inputFilter", async () => {
 		let filterCalled = false;
 		let filteredOutRoles: string[] = [];
 
@@ -453,7 +453,7 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		expect(filteredOutRoles.length).toBeGreaterThan(0);
 	});
 
-	test("streaming with Responses API and RunHooks", { timeout: 60000 }, async () => {
+	test("streaming with Responses API and RunHooks", async () => {
 		const events: string[] = [];
 		const agent = new Agent({
 			name: "responses-stream",
@@ -483,7 +483,7 @@ describe("Phase 6 Integration: Responses API", { timeout: 60000 }, () => {
 		expect(events).toContain("llm_end");
 	});
 
-	test("callModelInputFilter modifies request", { timeout: 60000 }, async () => {
+	test("callModelInputFilter modifies request", async () => {
 		let capturedTruncation: string | undefined;
 
 		const agent = new Agent({

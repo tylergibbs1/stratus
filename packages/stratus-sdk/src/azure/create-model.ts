@@ -12,6 +12,7 @@ export interface CreateModelOptions {
 	deployment?: string;
 	apiVersion?: string;
 	maxRetries?: number;
+	defaultHeaders?: Record<string, string>;
 	/** Only for AzureResponsesModel */
 	store?: boolean;
 }
@@ -69,5 +70,6 @@ export function createModel(
 	return new AzureResponsesModel({
 		...baseConfig,
 		...(options.store !== undefined ? { store: options.store } : {}),
+		...(options.defaultHeaders !== undefined ? { defaultHeaders: options.defaultHeaders } : {}),
 	});
 }

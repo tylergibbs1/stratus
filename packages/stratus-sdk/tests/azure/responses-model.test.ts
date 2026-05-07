@@ -307,6 +307,38 @@ describe("AzureResponsesModel", () => {
 		expect((options.headers as Record<string, string>)["api-key"]).toBe("test-key");
 	});
 
+	test("sends default headers with Responses API requests", async () => {
+		mockFetch({
+			json: {
+				status: "completed",
+				output: [
+					{
+						type: "message",
+						role: "assistant",
+						content: [{ type: "output_text", text: "ok" }],
+					},
+				],
+			},
+		});
+
+		const model = new AzureResponsesModel({
+			...config,
+			defaultHeaders: {
+				"x-ms-oai-image-generation-deployment": "gpt-image-1.5",
+				api_version: "preview",
+			},
+		});
+		await model.getResponse({ messages: [{ role: "user", content: "test" }] });
+
+		const fetchMock = globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } };
+		const [, options] = fetchMock.mock.calls[0]!;
+		const headers = options.headers as Record<string, string>;
+
+		expect(headers["x-ms-oai-image-generation-deployment"]).toBe("gpt-image-1.5");
+		expect(headers.api_version).toBe("preview");
+		expect(headers["api-key"]).toBe("test-key");
+	});
+
 	test("deployment sent as model in request body", async () => {
 		mockFetch({
 			json: {

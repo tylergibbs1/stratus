@@ -28,6 +28,8 @@ export interface AzureResponsesModelConfig {
 	deployment: string;
 	apiVersion?: string;
 	store?: boolean;
+	/** Extra headers sent with every Responses API request. Useful for Azure preview feature headers. */
+	defaultHeaders?: Record<string, string>;
 	/** Maximum number of retries on 429 / network errors (default 3). */
 	maxRetries?: number;
 }
@@ -125,6 +127,7 @@ export class AzureResponsesModel implements Model {
 	private readonly tokenProvider?: () => Promise<string>;
 	private readonly deployment: string;
 	private readonly store: boolean;
+	private readonly defaultHeaders: Record<string, string>;
 	private readonly maxRetries: number;
 
 	constructor(config: AzureResponsesModelConfig) {
@@ -138,6 +141,7 @@ export class AzureResponsesModel implements Model {
 		this.tokenProvider = config.azureAdTokenProvider;
 		this.deployment = config.deployment;
 		this.store = config.store ?? false;
+		this.defaultHeaders = config.defaultHeaders ?? {};
 		this.maxRetries = config.maxRetries ?? 3;
 		const apiVersion = config.apiVersion ?? DEFAULT_API_VERSION;
 		this.url = resolveResponsesUrl(config.endpoint, apiVersion);
@@ -407,6 +411,11 @@ export class AzureResponsesModel implements Model {
 	): Promise<RawResponse> {
 		const body = this.buildRequestBody(request, options?.stream ?? false);
 		body.background = true;
+		// Background mode is asynchronous and requires a retrievable stored response.
+		body.store = true;
+		if (request.previousResponseId) {
+			body.previous_response_id = request.previousResponseId;
+		}
 		const response = await this.doFetch(body, options?.signal);
 		return response.json();
 	}
@@ -424,7 +433,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method: "GET",
-			headers: { ...authHeaders },
+			headers: { ...this.defaultHeaders, ...authHeaders },
 			signal: options?.signal,
 		});
 
@@ -499,7 +508,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method: "GET",
-			headers: { "Content-Type": "application/json", ...authHeaders },
+			headers: { ...this.defaultHeaders, "Content-Type": "application/json", ...authHeaders },
 			signal: options?.signal,
 		});
 		if (!response.ok) {
@@ -513,7 +522,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method: "DELETE",
-			headers: { ...authHeaders },
+			headers: { ...this.defaultHeaders, ...authHeaders },
 			signal: options?.signal,
 		});
 		if (!response.ok) {
@@ -529,7 +538,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method: "POST",
-			headers: { "Content-Type": "application/json", ...authHeaders },
+			headers: { ...this.defaultHeaders, "Content-Type": "application/json", ...authHeaders },
 			body: JSON.stringify({}),
 			signal: options?.signal,
 		});
@@ -547,7 +556,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method: "GET",
-			headers: { "Content-Type": "application/json", ...authHeaders },
+			headers: { ...this.defaultHeaders, "Content-Type": "application/json", ...authHeaders },
 			signal: options?.signal,
 		});
 		if (!response.ok) {
@@ -586,7 +595,7 @@ export class AzureResponsesModel implements Model {
 		const authHeaders = await this.getAuthHeaders();
 		const response = await fetch(url, {
 			method,
-			headers: { "Content-Type": "application/json", ...authHeaders },
+			headers: { ...this.defaultHeaders, "Content-Type": "application/json", ...authHeaders },
 			body: JSON.stringify(body),
 			signal,
 		});
@@ -688,11 +697,6 @@ export class AzureResponsesModel implements Model {
 			body.text = convertResponseFormat(request.responseFormat);
 		}
 
-		// Only send previous_response_id when store is enabled (API needs to persist responses)
-		if (effectiveStore && request.previousResponseId) {
-			body.previous_response_id = request.previousResponseId;
-		}
-
 		const s = request.modelSettings;
 		if (s) {
 			if (s.temperature !== undefined) body.temperature = s.temperature;
@@ -721,6 +725,16 @@ export class AzureResponsesModel implements Model {
 			if (s.background !== undefined) body.background = s.background;
 		}
 
+		if (body.background === true) {
+			// Microsoft requires store=true for background mode; stateless background is invalid.
+			body.store = true;
+		}
+
+		// Only send previous_response_id when store is enabled (the API needs persisted responses).
+		if (body.store === true && request.previousResponseId) {
+			body.previous_response_id = request.previousResponseId;
+		}
+
 		return body;
 	}
 
@@ -732,6 +746,7 @@ export class AzureResponsesModel implements Model {
 				response = await fetch(this.url, {
 					method: "POST",
 					headers: {
+						...this.defaultHeaders,
 						"Content-Type": "application/json",
 						...authHeaders,
 					},
