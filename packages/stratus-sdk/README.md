@@ -22,7 +22,7 @@ A TypeScript agent SDK purpose-built for Azure OpenAI.
 - **Human-in-the-loop** — permission callbacks, per-tool approval, glob-filtered tools, and graceful mid-run interrupts.
 - **State you own** — save, resume, and fork conversations as JSON. No server-side threads.
 - **Type-safe end to end** — Zod schemas drive parameters, structured output, and validation. Types flow through agents, hooks, and guardrails at compile time.
-- **Zero dep** — only Zod as a peer dep.
+- **Tiny dependency surface** — Zod as a peer dep, with optional Effect integration when you want it.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `workflows` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
 
@@ -326,10 +326,25 @@ console.log(result.usage.totalTokens);
 Workflows support:
 - Bounded parallel phases (`concurrency`, capped by `maxConcurrency`)
 - Progress streaming with `streamWorkflow()`
+- Anthropic-style helpers: `ctx.fanOutAndSynthesize()`, `ctx.adversarialVerify()`, `ctx.generateAndFilter()`, `ctx.tournament()`, and `ctx.loopUntilDone()`
+- Token, cost, and duration guardrails through `budget`
+- Managed runs with `WorkflowRunManager` for event collection, stop, restart, and snapshot resume
+- Generated workflow drafts with `generateWorkflowDraft()` so users can preview the plan and script before running it
+- Saved workflow discovery/loading from `.stratus/workflows`
 - `AbortSignal` cancellation
 - `failFast: false` phases for tolerant audit-style runs
 - `resumeFrom` snapshots that skip completed task IDs
 - Custom function tasks for non-model work alongside agent tasks
+
+```ts
+const result = await runWorkflow(auditWorkflow, files, {
+  concurrency: 8,
+  maxTasks: 1000,
+  budget: { maxTotalTokens: 50_000, maxDurationMs: 10 * 60_000 },
+});
+```
+
+Budget checks run after tasks or synthesis calls complete, so concurrent phases can overshoot a threshold before the workflow stops. Use conservative concurrency for strict spend control.
 
 ### Guardrails
 
