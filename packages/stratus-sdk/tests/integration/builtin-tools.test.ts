@@ -1,20 +1,22 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { codeInterpreterTool, webSearchTool } from "../../src/core/builtin-tools";
 import { StratusError } from "../../src/core/errors";
 import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
+import {
+	createLiveChatModel,
+	createLiveResponsesModel,
+	describeIfAzureChat,
+	describeIfAzureResponses,
+} from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const responsesDescribe = describeIfAzureResponses;
+const chatDescribe = describeIfAzureChat;
+const model = createLiveResponsesModel();
 
-describe("builtin tools: web search", () => {
+responsesDescribe("builtin tools: web search", () => {
 	test("agent with webSearchTool answers a current events question", async () => {
 		const agent = new Agent({
 			name: "search-agent",
@@ -74,7 +76,7 @@ describe("builtin tools: web search", () => {
 	}, 30000);
 });
 
-describe("builtin tools: code interpreter", () => {
+responsesDescribe("builtin tools: code interpreter", () => {
 	// Requires a deployment that supports code_interpreter (not all models do)
 	test.skip("agent with codeInterpreterTool executes Python code", async () => {
 		const agent = new Agent({
@@ -95,7 +97,7 @@ describe("builtin tools: code interpreter", () => {
 	}, 60000);
 });
 
-describe("builtin tools: mixed with function tools", () => {
+responsesDescribe("builtin tools: mixed with function tools", () => {
 	test("agent uses both hosted and function tools", async () => {
 		let functionToolCalled = false;
 
@@ -127,13 +129,9 @@ describe("builtin tools: mixed with function tools", () => {
 	}, 60000);
 });
 
-describe("builtin tools: chat completions rejection", () => {
+chatDescribe("builtin tools: chat completions rejection", () => {
 	test("AzureChatCompletionsModel throws when given hosted tools", async () => {
-		const chatModel = new AzureChatCompletionsModel({
-			endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-			apiKey: process.env.AZURE_OPENAI_API_KEY!,
-			deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-		});
+		const chatModel = createLiveChatModel();
 
 		const agent = new Agent({
 			name: "should-fail",
@@ -152,7 +150,7 @@ describe("builtin tools: chat completions rejection", () => {
 	});
 });
 
-describe("builtin tools: toolChoice with responses API", () => {
+responsesDescribe("builtin tools: toolChoice with responses API", () => {
 	test("toolChoice specific function works with Responses API", async () => {
 		const greetTool = tool({
 			name: "greet",

@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
@@ -10,12 +9,10 @@ import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 import type { ContentPart } from "../../src/core/types";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -68,7 +65,7 @@ const lookupUser = tool({
 
 // ─── Basic: Text + Usage ────────────────────────────────────────────────
 
-describe("responses api: basic", () => {
+liveDescribe("responses api: basic", () => {
 	test("simple text response with usage", async () => {
 		const agent = new Agent({
 			name: "greeter",
@@ -89,7 +86,7 @@ describe("responses api: basic", () => {
 
 // ─── Tools: Single, Parallel, Multiple, toolChoice ──────────────────────
 
-describe("responses api: tools", () => {
+liveDescribe("responses api: tools", () => {
 	test("single tool call round-trip", async () => {
 		const agent = new Agent({
 			name: "weather-agent",
@@ -160,7 +157,7 @@ describe("responses api: tools", () => {
 
 // ─── Structured Output ──────────────────────────────────────────────────
 
-describe("responses api: structured output", () => {
+liveDescribe("responses api: structured output", () => {
 	test("tool + structured output via Zod schema", async () => {
 		const WeatherReport = z.object({
 			city: z.string(),
@@ -186,7 +183,7 @@ describe("responses api: structured output", () => {
 
 // ─── Streaming ──────────────────────────────────────────────────────────
 
-describe("responses api: streaming", () => {
+liveDescribe("responses api: streaming", () => {
 	test("streaming text yields content_delta events", async () => {
 		const agent = new Agent({
 			name: "streamer",
@@ -261,7 +258,7 @@ describe("responses api: streaming", () => {
 
 // ─── Handoffs ───────────────────────────────────────────────────────────
 
-describe("responses api: handoffs", () => {
+liveDescribe("responses api: handoffs", () => {
 	test("handoff with tools on target agent", async () => {
 		const mathAgent = new Agent({
 			name: "math_expert",
@@ -286,7 +283,7 @@ describe("responses api: handoffs", () => {
 
 // ─── Guardrails ─────────────────────────────────────────────────────────
 
-describe("responses api: guardrails", () => {
+liveDescribe("responses api: guardrails", () => {
 	test("input guardrail blocks before tools run", async () => {
 		const agent = new Agent({
 			name: "guarded",
@@ -336,7 +333,7 @@ describe("responses api: guardrails", () => {
 
 // ─── Enhanced Hooks ─────────────────────────────────────────────────────
 
-describe("responses api: hooks", () => {
+liveDescribe("responses api: hooks", () => {
 	test("hooks fire during tool use", async () => {
 		const events: string[] = [];
 
@@ -455,7 +452,7 @@ describe("responses api: hooks", () => {
 
 // ─── Tracing ────────────────────────────────────────────────────────────
 
-describe("responses api: tracing", () => {
+liveDescribe("responses api: tracing", () => {
 	test("tracing captures model + tool spans", async () => {
 		const agent = new Agent({
 			name: "traced",
@@ -483,7 +480,7 @@ describe("responses api: tracing", () => {
 
 // ─── Abort Signal ───────────────────────────────────────────────────────
 
-describe("responses api: abort signal", () => {
+liveDescribe("responses api: abort signal", () => {
 	test("pre-aborted signal throws RunAbortedError", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -526,7 +523,7 @@ describe("responses api: abort signal", () => {
 
 // ─── Sessions: Multi-Turn, Resume, Fork ─────────────────────────────────
 
-describe("responses api: sessions", () => {
+liveDescribe("responses api: sessions", () => {
 	test("multi-turn session preserves context", async () => {
 		const session = createSession({
 			model,
@@ -637,7 +634,7 @@ describe("responses api: sessions", () => {
 
 // ─── Multimodal ─────────────────────────────────────────────────────────
 
-describe("responses api: multimodal", () => {
+liveDescribe("responses api: multimodal", () => {
 	test("text-only ContentPart array works", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -674,7 +671,7 @@ describe("responses api: multimodal", () => {
 
 // ─── Subagents ──────────────────────────────────────────────────────────
 
-describe("responses api: subagents", () => {
+liveDescribe("responses api: subagents", () => {
 	test("parent delegates to child subagent", async () => {
 		const mathChild = new Agent({
 			name: "math_child",

@@ -1,24 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const storedModel = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-	store: true,
-});
-
-const statelessModel = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-	store: false,
-});
+const liveDescribe = describeIfAzureResponses;
+const storedModel = createLiveResponsesModel({ store: true });
+const statelessModel = createLiveResponsesModel({ store: false });
 
 const getWeather = tool({
 	name: "get_weather",
@@ -35,7 +25,7 @@ const getWeather = tool({
 
 // ─── 1. Compact: Agent run → compact → continue with compacted context ────
 
-describe("compact: agent workflow", () => {
+liveDescribe("compact: agent workflow", () => {
 	test("run agent, compact the result, continue conversation with compacted output", async () => {
 		const agent = new Agent({
 			name: "explainer",
@@ -76,7 +66,7 @@ describe("compact: agent workflow", () => {
 
 // ─── 2. Background: fire off long task, poll, use result ──────────────────
 
-describe("background: async agent workflow", () => {
+liveDescribe("background: async agent workflow", () => {
 	test("fire background request, poll until done, verify output", async () => {
 		// Start a background task via the model
 		const bg = await storedModel.createBackgroundResponse({
@@ -144,7 +134,7 @@ describe("background: async agent workflow", () => {
 
 // ─── 3. Encrypted reasoning: stateless multi-turn with include ────────────
 
-describe("encrypted reasoning: stateless multi-turn", () => {
+liveDescribe("encrypted reasoning: stateless multi-turn", () => {
 	test("include param is accepted and response succeeds", async () => {
 		// First turn with include
 		const result = await statelessModel.getResponse({
@@ -173,7 +163,7 @@ describe("encrypted reasoning: stateless multi-turn", () => {
 
 // ─── 4. CRUD: run agent → retrieve → list items → delete ─────────────────
 
-describe("CRUD: full lifecycle through agent run", () => {
+liveDescribe("CRUD: full lifecycle through agent run", () => {
 	test("run agent with tools, then retrieve/list/delete the stored response", async () => {
 		const agent = new Agent({
 			name: "weather-bot",
@@ -228,7 +218,7 @@ describe("CRUD: full lifecycle through agent run", () => {
 
 // ─── 5. Server-side compaction: session with context_management ───────────
 
-describe("context_management: session workflow", () => {
+liveDescribe("context_management: session workflow", () => {
 	test("session with context_management setting runs successfully", async () => {
 		const session = createSession({
 			model: statelessModel,
@@ -257,7 +247,7 @@ describe("context_management: session workflow", () => {
 
 // ─── 6. Compact via previous_response_id after agent run ──────────────────
 
-describe("compact with previous_response_id: end-to-end", () => {
+liveDescribe("compact with previous_response_id: end-to-end", () => {
 	test("compact a stored response by ID, then use output to continue", async () => {
 		// Step 1: Create stored response
 		const resp = await storedModel.getResponse({
@@ -285,7 +275,7 @@ describe("compact with previous_response_id: end-to-end", () => {
 
 // ─── 7. Streaming agent run with stored model → retrieve after ────────────
 
-describe("streaming + CRUD: stream an agent run, then retrieve", () => {
+liveDescribe("streaming + CRUD: stream an agent run, then retrieve", () => {
 	test("stream a response, then retrieve the stored version", async () => {
 		const agent = new Agent({
 			name: "poet",

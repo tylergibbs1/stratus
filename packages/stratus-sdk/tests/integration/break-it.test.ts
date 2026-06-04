@@ -2,7 +2,7 @@
  * Adversarial tests — intentionally trying to break the new features.
  * Each test targets a specific weak point or race condition.
  */
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
@@ -11,14 +11,12 @@ import { resumeRun, run, stream } from "../../src/core/run";
 import { createSession, loadSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
-describe("HITL abuse", () => {
+liveDescribe("HITL abuse", () => {
 	test("resumeRun with wrong toolCallId doesn't crash", async () => {
 		const deleteTool = tool({
 			name: "nuke",
@@ -118,7 +116,7 @@ describe("HITL abuse", () => {
 	}, 60000);
 });
 
-describe("retry abuse", () => {
+liveDescribe("retry abuse", () => {
 	test("tool that always throws exhausts retries and model recovers", async () => {
 		let callCount = 0;
 		const brokenTool = tool({
@@ -174,7 +172,7 @@ describe("retry abuse", () => {
 	}, 30000);
 });
 
-describe("session store abuse", () => {
+liveDescribe("session store abuse", () => {
 	test("store.save that throws doesn't crash the session", async () => {
 		let saveAttempts = 0;
 		const brokenStore = {
@@ -253,7 +251,7 @@ describe("session store abuse", () => {
 	}, 30000);
 });
 
-describe("subagent streaming edge cases", () => {
+liveDescribe("subagent streaming edge cases", () => {
 	test("subagent that errors still completes parent stream", async () => {
 		const errorAgent = new Agent({
 			name: "error-agent",
@@ -296,7 +294,7 @@ describe("subagent streaming edge cases", () => {
 	}, 60000);
 });
 
-describe("file input edge cases", () => {
+liveDescribe("file input edge cases", () => {
 	test("empty file content still accepted by API", async () => {
 		// A minimal valid PDF that's essentially empty
 		const emptyPdf = btoa(
@@ -347,7 +345,7 @@ describe("file input edge cases", () => {
 	}, 30000);
 });
 
-describe("abort during HITL resume", () => {
+liveDescribe("abort during HITL resume", () => {
 	test("abort signal during resumeRun cancels cleanly", async () => {
 		const slowTool = tool({
 			name: "slow_op",
@@ -399,7 +397,7 @@ describe("abort during HITL resume", () => {
 	}, 30000);
 });
 
-describe("state events ordering", () => {
+liveDescribe("state events ordering", () => {
 	test("events fire in correct lifecycle order", async () => {
 		const events: string[] = [];
 		const store = new MemorySessionStore();

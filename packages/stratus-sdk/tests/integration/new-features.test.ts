@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MemorySessionStore } from "../../src/core/memory-store";
 import { resumeRun, run, stream } from "../../src/core/run";
@@ -8,14 +7,12 @@ import type { SessionStateChangeEvent } from "../../src/core/session";
 import { createSession, loadSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
-describe("needsApproval + resumeRun (real API)", () => {
+liveDescribe("needsApproval + resumeRun (real API)", () => {
 	test("tool with needsApproval returns InterruptedRunResult", async () => {
 		const dangerousTool = tool({
 			name: "delete_file",
@@ -111,7 +108,7 @@ describe("needsApproval + resumeRun (real API)", () => {
 	}, 60000);
 });
 
-describe("tool retries (real API)", () => {
+liveDescribe("tool retries (real API)", () => {
 	test("tool with retries recovers from transient failure", async () => {
 		let callCount = 0;
 		const flakyTool = tool({
@@ -146,7 +143,7 @@ describe("tool retries (real API)", () => {
 	}, 30000);
 });
 
-describe("subagent streaming relay (real API)", () => {
+liveDescribe("subagent streaming relay (real API)", () => {
 	test("parent stream includes subagent events", async () => {
 		const mathAgent = new Agent({
 			name: "math-expert",
@@ -182,7 +179,7 @@ describe("subagent streaming relay (real API)", () => {
 	}, 60000);
 });
 
-describe("SessionStore (real API)", () => {
+liveDescribe("SessionStore (real API)", () => {
 	test("session auto-saves to store and can be loaded", async () => {
 		const store = new MemorySessionStore();
 
@@ -220,7 +217,7 @@ describe("SessionStore (real API)", () => {
 	}, 60000);
 });
 
-describe("session state change events (real API)", () => {
+liveDescribe("session state change events (real API)", () => {
 	test("onStateChange fires during interaction", async () => {
 		const events: SessionStateChangeEvent[] = [];
 
@@ -242,7 +239,7 @@ describe("session state change events (real API)", () => {
 	}, 30000);
 });
 
-describe("dynamic subagents (real API)", () => {
+liveDescribe("dynamic subagents (real API)", () => {
 	test("dynamic subagent works via run options", async () => {
 		const helperAgent = new Agent({
 			name: "helper",

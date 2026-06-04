@@ -1,11 +1,8 @@
-import { describe, expect, test } from "bun:test";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
+import { expect, test } from "bun:test";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
 // Minimal valid PDF (1 page, empty)
 const MINIMAL_PDF = [
@@ -25,7 +22,7 @@ const MINIMAL_PDF = [
 	"%%EOF",
 ].join("\n");
 
-describe("responses api parity", () => {
+liveDescribe("responses api parity", () => {
 	test("incomplete_details returned on truncated response", async () => {
 		const result = await model.getResponse({
 			messages: [

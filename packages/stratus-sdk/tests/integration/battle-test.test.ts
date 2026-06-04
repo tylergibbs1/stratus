@@ -2,29 +2,23 @@
  * Battle tests — stress-test new features against the real Azure API.
  * Targets edge cases, feature combinations, race conditions, and adversarial inputs.
  */
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import type { CanUseTool } from "../../src/core/run";
 import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
+import {
+	createLiveChatModel,
+	createLiveResponsesModel,
+	describeIfAzureChatAndResponses,
+} from "./live-env";
 
-const chatModel = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
-
-const responsesModel = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureChatAndResponses;
+const chatModel = createLiveChatModel();
+const responsesModel = createLiveResponsesModel();
 
 // --- Shared tools ---
 
@@ -82,7 +76,7 @@ const failingTool = tool({
 // allowedTools edge cases
 // ============================================================
 
-describe("allowedTools battle tests", () => {
+liveDescribe("allowedTools battle tests", () => {
 	test("empty allowedTools array means no tools sent to LLM", async () => {
 		const agent = new Agent({
 			name: "no-tools",
@@ -188,7 +182,7 @@ describe("allowedTools battle tests", () => {
 // canUseTool battle tests
 // ============================================================
 
-describe("canUseTool battle tests", () => {
+liveDescribe("canUseTool battle tests", () => {
 	test("canUseTool deny + LLM retries with different approach", async () => {
 		let denyCount = 0;
 		const canUseTool: CanUseTool = async (toolName) => {
@@ -312,7 +306,7 @@ describe("canUseTool battle tests", () => {
 // Graceful interrupt battle tests
 // ============================================================
 
-describe("interrupt battle tests", () => {
+liveDescribe("interrupt battle tests", () => {
 	test("interrupt during tool execution finishes current turn then stops", async () => {
 		_slowToolCallCount = 0;
 		const agent = new Agent({
@@ -415,7 +409,7 @@ describe("interrupt battle tests", () => {
 // Session tool management battle tests
 // ============================================================
 
-describe("session tool management battle tests", () => {
+liveDescribe("session tool management battle tests", () => {
 	test("setTools completely replaces tools", async () => {
 		const session = createSession({
 			model: chatModel,
@@ -536,7 +530,7 @@ describe("session tool management battle tests", () => {
 // Feature combinations
 // ============================================================
 
-describe("feature combinations", () => {
+liveDescribe("feature combinations", () => {
 	test("canUseTool + interrupt + streaming all work together", async () => {
 		let _toolCallCount = 0;
 		const canUseTool: CanUseTool = async () => {
@@ -644,7 +638,7 @@ describe("feature combinations", () => {
 // Error resilience
 // ============================================================
 
-describe("error resilience", () => {
+liveDescribe("error resilience", () => {
 	test("canUseTool that throws is handled gracefully", async () => {
 		const canUseTool: CanUseTool = async () => {
 			throw new Error("Permission service down");

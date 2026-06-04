@@ -1,25 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import type { CanUseTool } from "../../src/core/run";
 import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
+import {
+	createLiveChatModel,
+	createLiveResponsesModel,
+	describeIfAzureChatAndResponses,
+} from "./live-env";
 
-const chatModel = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
-
-const responsesModel = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureChatAndResponses;
+const chatModel = createLiveChatModel();
+const responsesModel = createLiveResponsesModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -51,7 +45,7 @@ const calculate = tool({
 
 // --- Predicted Output ---
 
-describe("predicted output (Chat Completions)", () => {
+liveDescribe("predicted output (Chat Completions)", () => {
 	test("prediction field accepted by Azure API", async () => {
 		const agent = new Agent({
 			name: "predictor",
@@ -71,7 +65,7 @@ describe("predicted output (Chat Completions)", () => {
 
 // --- Allowed Tools ---
 
-describe("allowedTools filtering", () => {
+liveDescribe("allowedTools filtering", () => {
 	test("only allowed tools are sent to LLM (Chat Completions)", async () => {
 		const agent = new Agent({
 			name: "filtered",
@@ -134,7 +128,7 @@ describe("allowedTools filtering", () => {
 
 // --- canUseTool HITL ---
 
-describe("canUseTool HITL", () => {
+liveDescribe("canUseTool HITL", () => {
 	test("deny blocks tool and LLM gets the deny message", async () => {
 		const agent = new Agent({
 			name: "hitl",
@@ -199,7 +193,7 @@ describe("canUseTool HITL", () => {
 
 // --- Graceful Interrupt ---
 
-describe("graceful interrupt", () => {
+liveDescribe("graceful interrupt", () => {
 	test("interrupt stops multi-turn run and returns partial result", async () => {
 		const agent = new Agent({
 			name: "interruptible",
@@ -236,7 +230,7 @@ describe("graceful interrupt", () => {
 
 // --- Session Tool Management ---
 
-describe("session tool management", () => {
+liveDescribe("session tool management", () => {
 	test("addTools makes new tool available mid-session", async () => {
 		const session = createSession({
 			model: chatModel,
@@ -297,7 +291,7 @@ describe("session tool management", () => {
 
 // --- Responses API: Context Management ---
 
-describe("context management (Responses API)", () => {
+liveDescribe("context management (Responses API)", () => {
 	test("contextManagement accepted by Responses API", async () => {
 		const agent = new Agent({
 			name: "context-mgmt",

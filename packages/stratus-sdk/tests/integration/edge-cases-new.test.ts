@@ -1,20 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MemorySessionStore } from "../../src/core/memory-store";
 import { resumeRun, run, stream } from "../../src/core/run";
 import { createSession, type SessionStore } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
-describe("needsApproval edge cases (real API)", () => {
+liveDescribe("needsApproval edge cases (real API)", () => {
 	test("needsApproval works in streaming path", async () => {
 		const deleteTool = tool({
 			name: "delete_item",
@@ -155,7 +152,7 @@ describe("needsApproval edge cases (real API)", () => {
 	}, 60000);
 });
 
-describe("tool retry edge cases (real API)", () => {
+liveDescribe("tool retry edge cases (real API)", () => {
 	test("shouldRetry predicate skips retry for specific errors", async () => {
 		let callCount = 0;
 
@@ -229,7 +226,7 @@ describe("tool retry edge cases (real API)", () => {
 	}, 30000);
 });
 
-describe("session persistence edge cases (real API)", () => {
+liveDescribe("session persistence edge cases (real API)", () => {
 	test("session NOT saved when stream errors", async () => {
 		const store = new MemorySessionStore();
 		let saveCount = 0;
@@ -296,7 +293,7 @@ describe("session persistence edge cases (real API)", () => {
 	}, 60000);
 });
 
-describe("subagent streaming relay edge cases (real API)", () => {
+liveDescribe("subagent streaming relay edge cases (real API)", () => {
 	test("subagent events appear in correct order", async () => {
 		const mathAgent = new Agent({
 			name: "calculator",
@@ -338,7 +335,7 @@ describe("subagent streaming relay edge cases (real API)", () => {
 	}, 60000);
 });
 
-describe("dynamic subagent edge cases (real API)", () => {
+liveDescribe("dynamic subagent edge cases (real API)", () => {
 	test("dynamic subagent combined with static tools", async () => {
 		const lookupTool = tool({
 			name: "lookup_price",

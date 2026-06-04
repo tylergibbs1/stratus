@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
@@ -7,14 +7,28 @@ import { handoff } from "../../src/core/handoff";
 import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
+import {
+	azureChatApiKey,
+	azureChatApiVersion,
+	azureChatDeployment,
+	azureChatEndpoint,
+	azureResponsesApiKey,
+	azureResponsesDeployment,
+	azureResponsesEndpoint,
+	describeIfAzureChat,
+	describeIfAzureResponses,
+} from "./live-env";
 
 // ─── Env ────────────────────────────────────────────────────────────────
 
-const endpoint = process.env.AZURE_OPENAI_ENDPOINT!;
-const apiKey = process.env.AZURE_OPENAI_API_KEY!;
-const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat";
-const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview";
-const responsesDeployment = process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? deployment;
+const endpoint = azureChatEndpoint;
+const apiKey = azureChatApiKey;
+const deployment = azureChatDeployment;
+const apiVersion = azureChatApiVersion;
+const responsesEndpoint = azureResponsesEndpoint;
+const responsesApiKey = azureResponsesApiKey;
+const chatDescribe = describeIfAzureChat;
+const responsesDescribe = describeIfAzureResponses;
 
 // ─── Helpers: build model from different URL shapes ─────────────────────
 
@@ -22,11 +36,15 @@ function chatModel(ep: string) {
 	return new AzureChatCompletionsModel({ endpoint: ep, apiKey, deployment, apiVersion });
 }
 function responsesModel(ep: string) {
-	return new AzureResponsesModel({ endpoint: ep, apiKey, deployment: responsesDeployment });
+	return new AzureResponsesModel({
+		endpoint: ep,
+		apiKey: responsesApiKey,
+		deployment: azureResponsesDeployment,
+	});
 }
 
 const fullChatUrl = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
-const fullResponsesUrl = `${endpoint}/openai/v1/responses`;
+const fullResponsesUrl = `${responsesEndpoint}/openai/v1/responses`;
 
 // ─── Shared tools ───────────────────────────────────────────────────────
 
@@ -60,7 +78,7 @@ const calculate = tool({
 
 // ─── Chat Completions: bare endpoint ────────────────────────────────────
 
-describe("Chat Completions — bare endpoint", () => {
+chatDescribe("Chat Completions — bare endpoint", () => {
 	const model = chatModel(endpoint);
 
 	test("simple run", async () => {
@@ -144,7 +162,7 @@ describe("Chat Completions — bare endpoint", () => {
 
 // ─── Chat Completions — trailing slash ──────────────────────────────────
 
-describe("Chat Completions — trailing slash", () => {
+chatDescribe("Chat Completions — trailing slash", () => {
 	const model = chatModel(`${endpoint}/`);
 
 	test("tool call + streaming", async () => {
@@ -167,7 +185,7 @@ describe("Chat Completions — trailing slash", () => {
 
 // ─── Chat Completions — full URL ────────────────────────────────────────
 
-describe("Chat Completions — full URL", () => {
+chatDescribe("Chat Completions — full URL", () => {
 	const model = chatModel(fullChatUrl);
 
 	test("run with tool ignores deployment/apiVersion config", async () => {
@@ -202,8 +220,8 @@ describe("Chat Completions — full URL", () => {
 
 // ─── Responses API — bare endpoint ──────────────────────────────────────
 
-describe("Responses API — bare endpoint", () => {
-	const model = responsesModel(endpoint);
+responsesDescribe("Responses API — bare endpoint", () => {
+	const model = responsesModel(responsesEndpoint);
 
 	test("simple run with usage", async () => {
 		const agent = new Agent({ name: "test", model, instructions: "Reply in one sentence." });
@@ -288,8 +306,8 @@ describe("Responses API — bare endpoint", () => {
 
 // ─── Responses API — trailing slash ─────────────────────────────────────
 
-describe("Responses API — trailing slash", () => {
-	const model = responsesModel(`${endpoint}/`);
+responsesDescribe("Responses API — trailing slash", () => {
+	const model = responsesModel(`${responsesEndpoint}/`);
 
 	test("tool call + streaming", async () => {
 		const agent = new Agent({
@@ -311,7 +329,7 @@ describe("Responses API — trailing slash", () => {
 
 // ─── Responses API — full URL ───────────────────────────────────────────
 
-describe("Responses API — full URL", () => {
+responsesDescribe("Responses API — full URL", () => {
 	const model = responsesModel(fullResponsesUrl);
 
 	test("run with tool ignores apiVersion config", async () => {

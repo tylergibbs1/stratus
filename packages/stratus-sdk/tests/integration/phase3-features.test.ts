@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
@@ -10,13 +9,10 @@ import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 import type { ContentPart } from "../../src/core/types";
+import { createLiveChatModel, describeIfAzureChat } from "./live-env";
 
-const model = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
+const liveDescribe = describeIfAzureChat;
+const model = createLiveChatModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -53,7 +49,7 @@ const calculate = tool({
 
 // ─── Sessions: Basic Multi-Turn ─────────────────────────────────────────
 
-describe("integration: sessions multi-turn", () => {
+liveDescribe("integration: sessions multi-turn", () => {
 	test("multi-turn session preserves context across send/stream cycles", async () => {
 		const session = createSession({
 			model,
@@ -100,7 +96,7 @@ describe("integration: sessions multi-turn", () => {
 
 // ─── Multimodal with image ─────────────────────────────────────────────
 
-describe("integration: multimodal image", () => {
+liveDescribe("integration: multimodal image", () => {
 	test("image_url ContentPart is accepted by Azure API", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -130,7 +126,7 @@ describe("integration: multimodal image", () => {
 
 // ─── Output Guardrails ─────────────────────────────────────────────────
 
-describe("integration: output guardrails", () => {
+liveDescribe("integration: output guardrails", () => {
 	test("output guardrail validates model response", async () => {
 		const outputChecks: string[] = [];
 
@@ -158,7 +154,7 @@ describe("integration: output guardrails", () => {
 
 // ─── Phase 3A: Quick Wins ──────────────────────────────────────────────
 
-describe("integration: finishReason", () => {
+liveDescribe("integration: finishReason", () => {
 	test("finishReason is 'stop' on normal completion", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -200,7 +196,7 @@ describe("integration: finishReason", () => {
 	}, 60_000);
 });
 
-describe("integration: cache tokens", () => {
+liveDescribe("integration: cache tokens", () => {
 	test("usage has standard token fields", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -216,7 +212,7 @@ describe("integration: cache tokens", () => {
 	}, 60_000);
 });
 
-describe("integration: multimodal", () => {
+liveDescribe("integration: multimodal", () => {
 	test("text-only ContentPart works in run()", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -267,7 +263,7 @@ describe("integration: multimodal", () => {
 
 // ─── Phase 3B: Enhanced Hooks ──────────────────────────────────────────
 
-describe("integration: enhanced hooks - tool permission control", () => {
+liveDescribe("integration: enhanced hooks - tool permission control", () => {
 	test("deny blocks tool execution, model sees denial message", async () => {
 		const deniedTools: string[] = [];
 
@@ -359,7 +355,7 @@ describe("integration: enhanced hooks - tool permission control", () => {
 
 // ─── Phase 3C: AbortSignal ──────────────────────────────────────────────
 
-describe("integration: abort signal", () => {
+liveDescribe("integration: abort signal", () => {
 	test("pre-aborted signal throws RunAbortedError", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -424,7 +420,7 @@ describe("integration: abort signal", () => {
 
 // ─── Phase 3D: Session Resume/Fork ──────────────────────────────────────
 
-describe("integration: session resume/fork", () => {
+liveDescribe("integration: session resume/fork", () => {
 	test("save and resume preserves conversation context", async () => {
 		// First session turn
 		const session1 = createSession({
@@ -487,7 +483,7 @@ describe("integration: session resume/fork", () => {
 
 // ─── Phase 3E: Subagents ──────────────────────────────────────────────
 
-describe("integration: subagents", () => {
+liveDescribe("integration: subagents", () => {
 	test("parent delegates to child subagent", async () => {
 		const mathChild = new Agent({
 			name: "math_child",

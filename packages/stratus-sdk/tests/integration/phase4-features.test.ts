@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import { MaxBudgetExceededError } from "../../src/core/errors";
@@ -10,13 +8,15 @@ import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 import type { ChatMessage } from "../../src/core/types";
+import {
+	createLiveChatModel,
+	createLiveResponsesModel,
+	describeIfAzureChat,
+	hasAzureResponsesEnv,
+} from "./live-env";
 
-const model = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
+const liveDescribe = describeIfAzureChat;
+const model = createLiveChatModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -33,7 +33,7 @@ const getWeather = tool({
 	},
 });
 
-describe("Phase 4: Integration Tests", () => {
+liveDescribe("Phase 4: Integration Tests", () => {
 	test("developer message is processed by the model", async () => {
 		const agent = new Agent({ name: "test", model });
 
@@ -353,13 +353,11 @@ describe("Phase 4: Integration Tests", () => {
 
 // Responses API tests - only run if deployment is configured
 const responsesDeployment = process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT;
-const runResponsesTests = responsesDeployment ? describe : describe.skip;
+const runResponsesTests = hasAzureResponsesEnv && responsesDeployment ? describe : describe.skip;
 
 runResponsesTests("Phase 4: Responses API Integration", () => {
-	const responsesModel = new AzureResponsesModel({
-		endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-		apiKey: process.env.AZURE_OPENAI_API_KEY!,
-		deployment: responsesDeployment!,
+	const responsesModel = createLiveResponsesModel({
+		deployment: responsesDeployment,
 		apiVersion: "2025-04-01-preview",
 	});
 
@@ -410,13 +408,11 @@ runResponsesTests("Phase 4: Responses API Integration", () => {
 
 // Reasoning model tests - only run if deployment is configured
 const reasoningDeployment = process.env.AZURE_OPENAI_REASONING_DEPLOYMENT;
-const runReasoningTests = reasoningDeployment ? describe : describe.skip;
+const runReasoningTests = hasAzureResponsesEnv && reasoningDeployment ? describe : describe.skip;
 
 runReasoningTests("Phase 4: Reasoning Model Integration", () => {
-	const reasoningModel = new AzureResponsesModel({
-		endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-		apiKey: process.env.AZURE_OPENAI_API_KEY!,
-		deployment: reasoningDeployment!,
+	const reasoningModel = createLiveResponsesModel({
+		deployment: reasoningDeployment,
 		apiVersion: "2025-04-01-preview",
 	});
 

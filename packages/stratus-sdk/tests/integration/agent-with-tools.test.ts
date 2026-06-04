@@ -1,18 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { Agent } from "../../src/core/agent";
 import type { InputGuardrail } from "../../src/core/guardrails";
 import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
+import { createLiveChatModel, describeIfAzureChat } from "./live-env";
 
-const model = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
+const liveDescribe = describeIfAzureChat;
+const model = createLiveChatModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -63,7 +59,7 @@ const lookupUser = tool({
 	},
 });
 
-describe("integration: agent with tools", () => {
+liveDescribe("integration: agent with tools", () => {
 	test("single tool call", async () => {
 		const agent = new Agent({
 			name: "weather-agent",

@@ -1,7 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { ToolTimeoutError } from "../../src/core/errors";
 import type { ToolInputGuardrail } from "../../src/core/guardrails";
@@ -9,19 +7,15 @@ import { handoff } from "../../src/core/handoff";
 import type { RunHooks } from "../../src/core/hooks";
 import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
+import {
+	createLiveChatModel,
+	createLiveResponsesModel,
+	describeIfAzureChatAndResponses,
+} from "./live-env";
 
-const chatModel = new AzureChatCompletionsModel({
-	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
-	apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2025-01-01-preview",
-});
-
-const responsesModel = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureChatAndResponses;
+const chatModel = createLiveChatModel();
+const responsesModel = createLiveResponsesModel();
 
 const getWeather = tool({
 	name: "get_weather",
@@ -66,7 +60,7 @@ const disabledTool = tool({
 	isEnabled: false,
 });
 
-describe("Phase 6 Integration: Chat Completions", () => {
+liveDescribe("Phase 6 Integration: Chat Completions", () => {
 	test("tool timeout produces error message and model recovers", async () => {
 		let timeoutDetected = false;
 		const agent = new Agent({
@@ -334,7 +328,7 @@ describe("Phase 6 Integration: Chat Completions", () => {
 	});
 });
 
-describe("Phase 6 Integration: Responses API", () => {
+liveDescribe("Phase 6 Integration: Responses API", () => {
 	test("new ModelSettings fields work with Responses API", async () => {
 		const agent = new Agent({
 			name: "responses-settings",

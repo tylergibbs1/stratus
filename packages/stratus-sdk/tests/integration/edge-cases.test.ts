@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MaxTurnsExceededError, RunAbortedError } from "../../src/core/errors";
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
@@ -9,16 +8,14 @@ import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
+import { createLiveResponsesModel, describeIfAzureResponses } from "./live-env";
 
-const model = new AzureResponsesModel({
-	endpoint: process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? process.env.AZURE_OPENAI_ENDPOINT!,
-	apiKey: process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? process.env.AZURE_OPENAI_API_KEY!,
-	deployment: process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? "gpt-5-chat",
-});
+const liveDescribe = describeIfAzureResponses;
+const model = createLiveResponsesModel();
 
 // ─── Tool error recovery ─────────────────────────────────────────────────
 
-describe("edge: tool error recovery against real API", () => {
+liveDescribe("edge: tool error recovery against real API", () => {
 	test("model recovers when tool throws an error", async () => {
 		let callCount = 0;
 		const flaky = tool({
@@ -73,7 +70,7 @@ describe("edge: tool error recovery against real API", () => {
 
 // ─── maxTurns limit ──────────────────────────────────────────────────────
 
-describe("edge: maxTurns with real API", () => {
+liveDescribe("edge: maxTurns with real API", () => {
 	test("maxTurns=2 prevents runaway tool loops", async () => {
 		const counter = tool({
 			name: "increment",
@@ -96,7 +93,7 @@ describe("edge: maxTurns with real API", () => {
 
 // ─── Abort signal ────────────────────────────────────────────────────────
 
-describe("edge: abort with real API", () => {
+liveDescribe("edge: abort with real API", () => {
 	test("pre-aborted signal throws immediately", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -147,7 +144,7 @@ describe("edge: abort with real API", () => {
 
 // ─── Structured output edge cases ────────────────────────────────────────
 
-describe("edge: structured output with real API", () => {
+liveDescribe("edge: structured output with real API", () => {
 	test("deeply nested Zod schema", async () => {
 		const Schema = z.object({
 			company: z.object({
@@ -204,7 +201,7 @@ describe("edge: structured output with real API", () => {
 
 // ─── Guardrails with real API ────────────────────────────────────────────
 
-describe("edge: guardrails with real API", () => {
+liveDescribe("edge: guardrails with real API", () => {
 	test("input guardrail blocks before any API call", async () => {
 		let _modelCalled = false;
 
@@ -252,7 +249,7 @@ describe("edge: guardrails with real API", () => {
 
 // ─── Hooks with real API ─────────────────────────────────────────────────
 
-describe("edge: hooks with real API", () => {
+liveDescribe("edge: hooks with real API", () => {
 	test("beforeToolCall deny sends denial to model, model responds", async () => {
 		const getWeather = tool({
 			name: "get_weather",
@@ -333,7 +330,7 @@ describe("edge: hooks with real API", () => {
 
 // ─── Concurrent runs with real API ───────────────────────────────────────
 
-describe("edge: concurrency with real API", () => {
+liveDescribe("edge: concurrency with real API", () => {
 	test("three parallel runs complete independently", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -355,7 +352,7 @@ describe("edge: concurrency with real API", () => {
 
 // ─── Streaming edge cases with real API ──────────────────────────────────
 
-describe("edge: streaming with real API", () => {
+liveDescribe("edge: streaming with real API", () => {
 	test("streamed content matches final result exactly", async () => {
 		const agent = new Agent({
 			name: "test",
@@ -412,7 +409,7 @@ describe("edge: streaming with real API", () => {
 
 // ─── Multi-turn session edge cases ───────────────────────────────────────
 
-describe("edge: session memory with real API", () => {
+liveDescribe("edge: session memory with real API", () => {
 	test("session preserves context across 3+ turns", async () => {
 		const session = createSession({
 			model,
@@ -444,7 +441,7 @@ describe("edge: session memory with real API", () => {
 
 // ─── Tracing under real load ─────────────────────────────────────────────
 
-describe("edge: tracing with real API", () => {
+liveDescribe("edge: tracing with real API", () => {
 	test("trace captures all spans including tool failures", async () => {
 		let callCount = 0;
 		const flaky = tool({
@@ -484,7 +481,7 @@ describe("edge: tracing with real API", () => {
 
 // ─── Usage tracking with real API ────────────────────────────────────────
 
-describe("edge: usage tracking with real API", () => {
+liveDescribe("edge: usage tracking with real API", () => {
 	test("usage accumulates across tool call rounds", async () => {
 		const lookup = tool({
 			name: "lookup",
