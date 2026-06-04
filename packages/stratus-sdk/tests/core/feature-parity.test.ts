@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
 import type { CanUseTool } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import type { ModelSettings } from "../../src/core/types";
@@ -366,9 +366,9 @@ describe("graceful interrupt", () => {
 		const agent = new Agent({ name: "test", model, tools: [slowTool] });
 		const { stream: s, result, interrupt } = stream(agent, "Do something");
 
-		let eventCount = 0;
+		let _eventCount = 0;
 		for await (const event of s) {
-			eventCount++;
+			_eventCount++;
 			// Interrupt after the first done event (first turn completes)
 			if (event.type === "done") {
 				interrupt();

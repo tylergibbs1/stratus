@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 

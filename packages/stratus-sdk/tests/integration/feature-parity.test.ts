@@ -3,8 +3,8 @@ import { z } from "zod";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
-import { run, stream } from "../../src/core/run";
 import type { CanUseTool } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 
@@ -209,7 +209,11 @@ describe("graceful interrupt", () => {
 				"First get the weather in NYC, then calculate 100 * 2, then get weather in London. Always use tools.",
 		});
 
-		const { stream: s, result, interrupt } = stream(agent, "Do all three tasks.", {
+		const {
+			stream: s,
+			result,
+			interrupt,
+		} = stream(agent, "Do all three tasks.", {
 			maxTurns: 10,
 		});
 

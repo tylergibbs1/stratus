@@ -7,3 +7,4 @@ dist/
 .breadcrumbs.json
 **/test-models.json
 **/test-todo.ts
+scripts/*.sqlite*

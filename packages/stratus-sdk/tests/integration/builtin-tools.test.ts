@@ -5,7 +5,7 @@ import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { codeInterpreterTool, webSearchTool } from "../../src/core/builtin-tools";
 import { StratusError } from "../../src/core/errors";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 const model = new AzureResponsesModel({

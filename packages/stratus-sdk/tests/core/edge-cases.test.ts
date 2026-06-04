@@ -11,7 +11,7 @@ import {
 } from "../../src/core/errors";
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";

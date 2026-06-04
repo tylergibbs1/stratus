@@ -7,16 +7,20 @@
  */
 
 import { z } from "zod";
-import { isFunctionTool } from "../hosted-tool";
 import type { AgentTool } from "../hosted-tool";
-import { tool } from "../tool";
+import { isFunctionTool } from "../hosted-tool";
 import type { FunctionTool } from "../tool";
+import { tool } from "../tool";
 import type { Executor } from "./executor";
 import { generateTypes, normalizeCode, sanitizeToolName } from "./types";
 
-export type { Executor, ExecuteResult } from "./executor";
+export type {
+	ExecuteResult,
+	Executor,
+	FunctionExecutorOptions,
+	WorkerExecutorOptions,
+} from "./executor";
 export { FunctionExecutor, WorkerExecutor } from "./executor";
-export type { FunctionExecutorOptions, WorkerExecutorOptions } from "./executor";
 export { generateTypes, normalizeCode, sanitizeToolName } from "./types";
 
 // ── Default description ────────────────────────────────────────────

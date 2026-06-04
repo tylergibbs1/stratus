@@ -8,7 +8,7 @@ import { handoff, handoffToDefinition } from "../../src/core/handoff";
 import type { RunHooks } from "../../src/core/hooks";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
 import { RunResult } from "../../src/core/result";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import type { ModelSettings } from "../../src/core/types";
 

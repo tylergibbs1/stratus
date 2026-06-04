@@ -7,8 +7,7 @@ import { z } from "zod";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MemorySessionStore } from "../../src/core/memory-store";
-import { ModelError } from "../../src/core/errors";
-import { run, stream, resumeRun } from "../../src/core/run";
+import { resumeRun, run, stream } from "../../src/core/run";
 import { createSession, loadSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
@@ -170,7 +169,7 @@ describe("retry abuse", () => {
 			tools: [noRetryTool],
 		});
 
-		const result = await run(agent, "Try it", { maxTurns: 3 });
+		const _result = await run(agent, "Try it", { maxTurns: 3 });
 		expect(callCount).toBe(1); // No retries
 	}, 30000);
 });
@@ -230,20 +229,20 @@ describe("session store abuse", () => {
 		// First stream
 		session.send("Hello");
 		const streamPromise = (async () => {
-			for await (const event of session.stream()) {
+			for await (const _event of session.stream()) {
 				// consume
 			}
 		})();
 
 		// Try to send while streaming — should throw or queue
-		let threwError = false;
+		let _threwError = false;
 		try {
 			session.send("World");
-			for await (const event of session.stream()) {
+			for await (const _event of session.stream()) {
 				// consume
 			}
 		} catch {
-			threwError = true;
+			_threwError = true;
 		}
 
 		await streamPromise;
@@ -278,8 +277,7 @@ describe("subagent streaming edge cases", () => {
 		const parentAgent = new Agent({
 			name: "parent",
 			model,
-			instructions:
-				"Use ask_broken tool. If it fails, apologize and answer the question yourself.",
+			instructions: "Use ask_broken tool. If it fails, apologize and answer the question yourself.",
 			subagents: [errorSubagent],
 		});
 
@@ -301,14 +299,20 @@ describe("subagent streaming edge cases", () => {
 describe("file input edge cases", () => {
 	test("empty file content still accepted by API", async () => {
 		// A minimal valid PDF that's essentially empty
-		const emptyPdf = btoa("%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF");
+		const emptyPdf = btoa(
+			"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF",
+		);
 
 		const result = await model.getResponse({
 			messages: [
 				{
 					role: "user",
 					content: [
-						{ type: "file", file: { url: `data:application/pdf;base64,${emptyPdf}` }, filename: "empty.pdf" },
+						{
+							type: "file",
+							file: { url: `data:application/pdf;base64,${emptyPdf}` },
+							filename: "empty.pdf",
+						},
 						{ type: "text", text: "Is this PDF empty? Reply yes or no." },
 					],
 				},
@@ -319,7 +323,9 @@ describe("file input edge cases", () => {
 	}, 30000);
 
 	test("mixed text + image + file in one message", async () => {
-		const pdfData = btoa("%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF");
+		const pdfData = btoa(
+			"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF",
+		);
 
 		const result = await model.getResponse({
 			messages: [
@@ -327,7 +333,11 @@ describe("file input edge cases", () => {
 					role: "user",
 					content: [
 						{ type: "text", text: "How many items am I sending you? Reply with just the count." },
-						{ type: "file", file: { url: `data:application/pdf;base64,${pdfData}` }, filename: "doc.pdf" },
+						{
+							type: "file",
+							file: { url: `data:application/pdf;base64,${pdfData}` },
+							filename: "doc.pdf",
+						},
 					],
 				},
 			],
@@ -379,7 +389,7 @@ describe("abort during HITL resume", () => {
 					[{ toolCallId: result.pendingToolCalls[0]!.toolCallId, decision: "approve" }],
 					{ signal: ac.signal },
 				);
-			} catch (err) {
+			} catch (_err) {
 				aborted = true;
 			}
 
@@ -403,7 +413,7 @@ describe("state events ordering", () => {
 		});
 
 		session.send("Hi");
-		for await (const event of session.stream()) {
+		for await (const _event of session.stream()) {
 			// consume
 		}
 		await session.result;

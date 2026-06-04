@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { Agent } from "../../src/core/agent";
 import type { InputGuardrail } from "../../src/core/guardrails";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 

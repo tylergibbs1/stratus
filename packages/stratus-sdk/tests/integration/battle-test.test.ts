@@ -7,10 +7,8 @@ import { z } from "zod";
 import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-model";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
-import { MaxTurnsExceededError } from "../../src/core/errors";
-import { handoff } from "../../src/core/handoff";
-import { run, stream, resumeRun } from "../../src/core/run";
 import type { CanUseTool } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
@@ -59,13 +57,13 @@ const calculate = tool({
 	},
 });
 
-let slowToolCallCount = 0;
+let _slowToolCallCount = 0;
 const slowTool = tool({
 	name: "slow_operation",
 	description: "A slow operation that takes time",
 	parameters: z.object({ task: z.string() }),
 	execute: async (_ctx, { task }) => {
-		slowToolCallCount++;
+		_slowToolCallCount++;
 		await new Promise((r) => setTimeout(r, 100));
 		return `Completed: ${task}`;
 	},
@@ -196,7 +194,10 @@ describe("canUseTool battle tests", () => {
 		const canUseTool: CanUseTool = async (toolName) => {
 			if (toolName === "get_weather") {
 				denyCount++;
-				return { behavior: "deny", message: "Weather lookups are disabled. Tell the user you cannot check weather." };
+				return {
+					behavior: "deny",
+					message: "Weather lookups are disabled. Tell the user you cannot check weather.",
+				};
 			}
 			return { behavior: "allow" };
 		};
@@ -205,7 +206,8 @@ describe("canUseTool battle tests", () => {
 			name: "retry-test",
 			model: chatModel,
 			tools: [getWeather, calculate],
-			instructions: "Try to use tools to answer. If a tool is denied, stop trying that tool and respond to the user.",
+			instructions:
+				"Try to use tools to answer. If a tool is denied, stop trying that tool and respond to the user.",
 		});
 
 		const result = await run(agent, "What's the weather in NYC?", {
@@ -220,7 +222,7 @@ describe("canUseTool battle tests", () => {
 	}, 60000);
 
 	test("canUseTool with async delay still works", async () => {
-		const canUseTool: CanUseTool = async (toolName) => {
+		const canUseTool: CanUseTool = async (_toolName) => {
 			// Simulate a slow approval process
 			await new Promise((r) => setTimeout(r, 500));
 			return { behavior: "allow" };
@@ -312,7 +314,7 @@ describe("canUseTool battle tests", () => {
 
 describe("interrupt battle tests", () => {
 	test("interrupt during tool execution finishes current turn then stops", async () => {
-		slowToolCallCount = 0;
+		_slowToolCallCount = 0;
 		const agent = new Agent({
 			name: "multi-tool",
 			model: chatModel,
@@ -321,7 +323,11 @@ describe("interrupt battle tests", () => {
 				"Call slow_operation three times with tasks: 'task1', 'task2', 'task3'. Do them one at a time across separate turns.",
 		});
 
-		const { stream: s, result, interrupt } = stream(agent, "Do all three tasks.", {
+		const {
+			stream: s,
+			result,
+			interrupt,
+		} = stream(agent, "Do all three tasks.", {
 			maxTurns: 10,
 		});
 
@@ -373,7 +379,11 @@ describe("interrupt battle tests", () => {
 			instructions: "Call slow_operation with 'work'. Reply after.",
 		});
 
-		const { stream: s, result, interrupt } = stream(agent, "Do the work.", {
+		const {
+			stream: s,
+			result,
+			interrupt,
+		} = stream(agent, "Do the work.", {
 			maxTurns: 5,
 			signal: controller.signal,
 		});
@@ -528,9 +538,9 @@ describe("session tool management battle tests", () => {
 
 describe("feature combinations", () => {
 	test("canUseTool + interrupt + streaming all work together", async () => {
-		let toolCallCount = 0;
+		let _toolCallCount = 0;
 		const canUseTool: CanUseTool = async () => {
-			toolCallCount++;
+			_toolCallCount++;
 			return { behavior: "allow" };
 		};
 
@@ -542,7 +552,11 @@ describe("feature combinations", () => {
 				"First get weather for NYC, then calculate 10 * 5. Use tools for both. Reply after.",
 		});
 
-		const { stream: s, result, interrupt } = stream(agent, "Do both tasks.", {
+		const {
+			stream: s,
+			result,
+			interrupt,
+		} = stream(agent, "Do both tasks.", {
 			canUseTool,
 			maxTurns: 6,
 		});
@@ -587,8 +601,7 @@ describe("feature combinations", () => {
 			model: chatModel,
 			tools: [getWeather],
 			subagents: [sa],
-			instructions:
-				"For math, use run_math_agent. For weather, use get_weather. Reply concisely.",
+			instructions: "For math, use run_math_agent. For weather, use get_weather. Reply concisely.",
 		});
 
 		// Only allow the subagent tool, block direct weather

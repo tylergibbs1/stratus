@@ -4,7 +4,7 @@ import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import { MaxBudgetExceededError } from "../../src/core/errors";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {

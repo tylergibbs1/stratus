@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import { webSearchTool } from "../../src/core/builtin-tools";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 describe("hosted tools in run loop", () => {

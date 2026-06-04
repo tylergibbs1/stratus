@@ -5,7 +5,7 @@ import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { createCostEstimator } from "../../src/core/cost";
 import { MaxBudgetExceededError } from "../../src/core/errors";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";

@@ -1,6 +1,6 @@
 {
 	"name": "@usestratus/sdk",
-	"version": "1.6.0",
+	"version": "1.7.0",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -16,6 +16,14 @@
 		"./azure": {
 			"types": "./dist/azure/index.d.ts",
 			"import": "./dist/azure/index.js"
+		},
+		"./effect": {
+			"types": "./dist/effect/index.d.ts",
+			"import": "./dist/effect/index.js"
+		},
+		"./ai-sdk": {
+			"types": "./dist/ai-sdk/index.d.ts",
+			"import": "./dist/ai-sdk/index.js"
 		},
 		"./testing": {
 			"types": "./dist/testing/index.d.ts",
@@ -39,16 +47,22 @@
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
-		"lint": "eslint .",
-		"lint:fix": "eslint . --fix",
-		"format": "prettier --write .",
-		"format:check": "prettier --check .",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
 		"test": "bun test"
 	},
 	"peerDependencies": {
+		"effect": "^3.21.2",
 		"zod": "^4.0.0"
 	},
+	"peerDependenciesMeta": {
+		"effect": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"effect": "^3.21.2",
 		"zod": "^4.0.0"
 	}
 }

@@ -1000,11 +1000,17 @@ function convertUserContent(content: string | ContentPart[]): ResponsesContentPa
 			case "text":
 				return { type: "input_text" as const, text: part.text };
 			case "image_url":
-				return {
-					type: "input_image" as const,
-					image_url: part.image_url.url,
-					detail: part.image_url.detail,
-				};
+				return "url" in part.image_url
+					? {
+							type: "input_image" as const,
+							image_url: part.image_url.url,
+							detail: part.image_url.detail,
+						}
+					: {
+							type: "input_image" as const,
+							file_id: part.image_url.file_id,
+							detail: part.image_url.detail,
+						};
 			case "file": {
 				const filePart: ResponsesContentPart =
 					"url" in part.file
@@ -1024,6 +1030,10 @@ function convertUserContent(content: string | ContentPart[]): ResponsesContentPa
 					data: part.audio.data,
 					format: part.audio.format,
 				};
+			}
+			default: {
+				const exhaustive: never = part;
+				return exhaustive;
 			}
 		}
 	});
@@ -1106,7 +1116,7 @@ type ResponsesOutputItem =
 
 type ResponsesContentPart =
 	| { type: "input_text"; text: string }
-	| { type: "input_image"; image_url: string; detail?: string }
+	| { type: "input_image"; image_url?: string; file_id?: string; detail?: string }
 	| { type: "input_file"; file_data?: string; file_id?: string; filename?: string }
 	| { type: "input_audio"; audio_url?: string; data?: string; format?: string }
 	| { type: "output_text"; text: string };

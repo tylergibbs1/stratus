@@ -5,7 +5,7 @@ import { Agent } from "../../src/core/agent";
 import { MaxTurnsExceededError, RunAbortedError } from "../../src/core/errors";
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
 import type { ToolCallDecision } from "../../src/core/hooks";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession } from "../../src/core/session";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";

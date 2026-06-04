@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { MemorySessionStore } from "../../src/core/memory-store";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { createSession, loadSession } from "../../src/core/session";
 import type { SessionSnapshot } from "../../src/core/session";
+import { createSession, loadSession } from "../../src/core/session";
 
 function mockModel(responses: ModelResponse[]): Model {
 	let callIndex = 0;

@@ -366,9 +366,7 @@ describe("session.wait()", () => {
 	});
 
 	test("throws if called without send()", async () => {
-		const model = mockModel([
-			{ content: "First", toolCalls: [] },
-		]);
+		const model = mockModel([{ content: "First", toolCalls: [] }]);
 		const session = createSession({ model });
 
 		// First: normal flow

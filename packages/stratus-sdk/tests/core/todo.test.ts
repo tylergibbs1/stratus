@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
-import { TodoList, todoTool } from "../../src/core/todo";
 import type { Todo } from "../../src/core/todo";
+import { TodoList, todoTool } from "../../src/core/todo";
 
 describe("TodoList", () => {
 	it("starts empty", () => {

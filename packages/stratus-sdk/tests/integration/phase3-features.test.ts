@@ -4,7 +4,7 @@ import { AzureChatCompletionsModel } from "../../src/azure/chat-completions-mode
 import { Agent } from "../../src/core/agent";
 import { RunAbortedError } from "../../src/core/errors";
 import type { HandoffDecision, ToolCallDecision } from "../../src/core/hooks";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { createSession, forkSession, prompt, resumeSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";

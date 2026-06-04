@@ -1,8 +1,7 @@
-export { createModel } from "./create-model";
-export type { CreateModelOptions, ModelType } from "./create-model";
-export { AzureChatCompletionsModel } from "./chat-completions-model";
 export type { AzureChatCompletionsModelConfig } from "./chat-completions-model";
-export { AzureResponsesModel } from "./responses-model";
+export { AzureChatCompletionsModel } from "./chat-completions-model";
+export type { CreateModelOptions, ModelType } from "./create-model";
+export { createModel } from "./create-model";
 export type {
 	AzureResponsesModelConfig,
 	CompactOptions,
@@ -13,3 +12,4 @@ export type {
 	ResponseStatus,
 	RetrieveStreamOptions,
 } from "./responses-model";
+export { AzureResponsesModel } from "./responses-model";

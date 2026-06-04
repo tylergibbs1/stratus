@@ -1,6 +1,6 @@
 import { StratusError } from "./errors";
-import { isFunctionTool } from "./hosted-tool";
 import type { AgentTool } from "./hosted-tool";
+import { isFunctionTool } from "./hosted-tool";
 
 export interface ValidationResult {
 	errors: string[];

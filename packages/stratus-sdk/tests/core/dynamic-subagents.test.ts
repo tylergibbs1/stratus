@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { subagent } from "../../src/core/subagent";
 
 function mockModel(responses: ModelResponse[]): Model & { requests: ModelRequest[] } {

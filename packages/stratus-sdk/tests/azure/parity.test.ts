@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
-import type { ModelResponse } from "../../src/core/model";
 
 const originalFetch = globalThis.fetch;
 
@@ -12,15 +11,10 @@ const config = {
 
 let capturedBody: Record<string, unknown> | null = null;
 
-function mockFetch(response: {
-	ok?: boolean;
-	status?: number;
-	json?: unknown;
-	headers?: Headers;
-}) {
+function mockFetch(response: { ok?: boolean; status?: number; json?: unknown; headers?: Headers }) {
 	capturedBody = null;
 	// @ts-expect-error -- mock subset of fetch
-	globalThis.fetch = mock((url: string, init: RequestInit) => {
+	globalThis.fetch = mock((_url: string, init: RequestInit) => {
 		if (init.body) {
 			capturedBody = JSON.parse(init.body as string);
 		}
@@ -156,6 +150,37 @@ describe("mcp_approval_request output", () => {
 });
 
 describe("file content part serialization", () => {
+	test("sends input_image with file_id", async () => {
+		mockFetch({
+			json: {
+				status: "completed",
+				output: [{ type: "message", content: [{ type: "output_text", text: "caption" }] }],
+				usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+			},
+		});
+
+		const model = new AzureResponsesModel(config);
+		await model.getResponse({
+			messages: [
+				{
+					role: "user",
+					content: [
+						{ type: "image_url", image_url: { file_id: "file-image123", detail: "low" } },
+						{ type: "text", text: "Describe this image" },
+					],
+				},
+			],
+		});
+
+		expect(capturedBody).toBeTruthy();
+		const input = capturedBody!.input as unknown[];
+		const userMsg = input[0] as { content: unknown[] };
+		const imagePart = userMsg.content[0] as Record<string, unknown>;
+		expect(imagePart.type).toBe("input_image");
+		expect(imagePart.file_id).toBe("file-image123");
+		expect(imagePart.detail).toBe("low");
+	});
+
 	test("sends input_file with file_id", async () => {
 		mockFetch({
 			json: {

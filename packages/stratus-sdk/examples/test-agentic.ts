@@ -3,22 +3,20 @@ import {
 	Agent,
 	AzureChatCompletionsModel,
 	AzureResponsesModel,
+	createCostEstimator,
+	createSession,
+	InputGuardrailTripwireTriggered,
+	RunAbortedError,
+	resumeSession,
 	run,
 	stream,
-	tool,
-	handoff,
 	subagent,
-	todoTool,
 	TodoList,
-	createSession,
-	resumeSession,
-	forkSession,
+	todoTool,
+	tool,
 	withTrace,
-	createCostEstimator,
-	RunAbortedError,
-	InputGuardrailTripwireTriggered,
 } from "../src";
-import type { InputGuardrail, OutputGuardrail } from "../src/core/guardrails";
+import type { InputGuardrail } from "../src/core/guardrails";
 import type { Model } from "../src/core/model";
 
 // ── Model configs ──
@@ -30,6 +28,62 @@ interface ModelConfig {
 }
 
 const models: ModelConfig[] = [];
+
+function calculate(expression: string, fallback: string): string {
+	const compact = expression.replace(/\s+/g, "");
+	const tokens = compact.match(/\d+(?:\.\d+)?|[+\-*/()]/g);
+	if (!tokens || tokens.join("") !== compact) return fallback;
+
+	let index = 0;
+	const current = () => tokens[index];
+
+	const parseFactor = (): number => {
+		const token = current();
+		if (token === undefined) throw new Error("Unexpected end");
+		if (token === "-") {
+			index++;
+			return -parseFactor();
+		}
+		if (token === "(") {
+			index++;
+			const value = parseExpression();
+			if (current() !== ")") throw new Error("Expected closing parenthesis");
+			index++;
+			return value;
+		}
+		index++;
+		return Number(token);
+	};
+
+	const parseTerm = (): number => {
+		let value = parseFactor();
+		while (current() === "*" || current() === "/") {
+			const operator = current();
+			index++;
+			const next = parseFactor();
+			value = operator === "*" ? value * next : value / next;
+		}
+		return value;
+	};
+
+	function parseExpression(): number {
+		let value = parseTerm();
+		while (current() === "+" || current() === "-") {
+			const operator = current();
+			index++;
+			const next = parseTerm();
+			value = operator === "+" ? value + next : value - next;
+		}
+		return value;
+	}
+
+	try {
+		const value = parseExpression();
+		return index === tokens.length && Number.isFinite(value) ? String(value) : fallback;
+	} catch {
+		return fallback;
+	}
+}
 
 // Load configs from JSON (gitignored, has API keys)
 try {
@@ -128,7 +182,9 @@ addTest("Single tool call", async (model) => {
 	});
 
 	const result = await run(agent, "What's the weather in Tokyo?");
-	const pass = result.output.length > 0 && (result.output.toLowerCase().includes("tokyo") || result.output.includes("72"));
+	const pass =
+		result.output.length > 0 &&
+		(result.output.toLowerCase().includes("tokyo") || result.output.includes("72"));
 	return { pass, detail: `Output: ${result.output.slice(0, 150)}` };
 });
 
@@ -160,14 +216,18 @@ addTest("Multi-tool sequential", async (model) => {
 
 	const agent = new Agent({
 		name: "city-bot",
-		instructions: "Answer questions about cities. Use tools to look up facts. Use both tools for each city asked about.",
+		instructions:
+			"Answer questions about cities. Use tools to look up facts. Use both tools for each city asked about.",
 		model,
 		tools: [getPopulation, getCountry],
 	});
 
-	const result = await run(agent, "What country is Paris in and what's its population?", { maxTurns: 5 });
+	const result = await run(agent, "What country is Paris in and what's its population?", {
+		maxTurns: 5,
+	});
 	const usedBothTools =
-		toolCalls.some((c) => c.startsWith("population:")) && toolCalls.some((c) => c.startsWith("country:"));
+		toolCalls.some((c) => c.startsWith("population:")) &&
+		toolCalls.some((c) => c.startsWith("country:"));
 	return {
 		pass: usedBothTools && result.output.length > 0,
 		detail: `Tools called: [${toolCalls.join(", ")}] | Output: ${result.output.slice(0, 120)}`,
@@ -233,17 +293,14 @@ addTest("Streaming + tools", async (model) => {
 		parameters: z.object({ expression: z.string() }),
 		execute: async (_ctx, { expression }) => {
 			toolExecuted = true;
-			try {
-				return String(eval(expression));
-			} catch {
-				return "error";
-			}
+			return calculate(expression, "error");
 		},
 	});
 
 	const agent = new Agent({
 		name: "math-bot",
-		instructions: "You are a math assistant. Always use the calculate tool for math. Respond with the result.",
+		instructions:
+			"You are a math assistant. Always use the calculate tool for math. Respond with the result.",
 		model,
 		tools: [calculator],
 	});
@@ -264,14 +321,16 @@ addTest("Streaming + tools", async (model) => {
 addTest("Handoffs", async (model) => {
 	const spanishAgent = new Agent({
 		name: "spanish_translator",
-		instructions: "You are a Spanish translator. Translate the user's message to Spanish. Only output the translation.",
+		instructions:
+			"You are a Spanish translator. Translate the user's message to Spanish. Only output the translation.",
 		model,
 		handoffDescription: "Transfer to translate text to Spanish",
 	});
 
 	const triageAgent = new Agent({
 		name: "triage",
-		instructions: "You are a router. If the user wants a translation, hand off to the spanish_translator.",
+		instructions:
+			"You are a router. If the user wants a translation, hand off to the spanish_translator.",
 		model,
 		handoffs: [spanishAgent],
 	});
@@ -306,7 +365,8 @@ addTest("Context-aware tools", async (model) => {
 
 	const context: UserCtx = { userId: "usr_123", permissions: ["read", "write", "admin"] };
 	const result = await run(agent, "What's my profile?", { context });
-	const mentionsUser = result.output.includes("123") || result.output.toLowerCase().includes("user");
+	const mentionsUser =
+		result.output.includes("123") || result.output.toLowerCase().includes("user");
 	return {
 		pass: result.output.length > 0 && mentionsUser,
 		detail: `Output: ${result.output.slice(0, 150)}`,
@@ -333,7 +393,7 @@ addTest("Todo tracking", async (model) => {
 
 	const result = await run(agent, "Plan how to make a sandwich", { maxTurns: 8 });
 	const hadTodos = todos.todos.length > 0 || updates.length > 0;
-	const completedSome = todos.todos.some((t) => t.status === "completed");
+	const _completedSome = todos.todos.some((t) => t.status === "completed");
 	return {
 		pass: hadTodos && updates.length >= 2,
 		detail: `Updates: ${updates.length} | Final todos: ${todos.todos.length} | Completed: ${todos.todos.filter((t) => t.status === "completed").length} | Output: ${result.output.slice(0, 80)}`,
@@ -374,7 +434,8 @@ addTest("Streaming + todos", async (model) => {
 addTest("Subagents", async (model) => {
 	const researcher = new Agent({
 		name: "researcher",
-		instructions: "You are a research assistant. Answer the research query concisely in 1-2 sentences.",
+		instructions:
+			"You are a research assistant. Answer the research query concisely in 1-2 sentences.",
 		model,
 	});
 
@@ -445,12 +506,14 @@ addTest("Sessions", async (model) => {
 
 	// Turn 1
 	session.send("My name is Alice. Remember it.");
-	for await (const _event of session.stream()) {}
-	const r1 = await session.result;
+	for await (const _event of session.stream()) {
+	}
+	const _r1 = await session.result;
 
 	// Turn 2 — should remember context
 	session.send("What is my name?");
-	for await (const _event of session.stream()) {}
+	for await (const _event of session.stream()) {
+	}
 	const r2 = await session.result;
 	const remembersName = r2.output.toLowerCase().includes("alice");
 
@@ -461,7 +524,8 @@ addTest("Sessions", async (model) => {
 		instructions: "You are a helpful assistant. Be very concise.",
 	});
 	resumed.send("Say my name again.");
-	for await (const _event of resumed.stream()) {}
+	for await (const _event of resumed.stream()) {
+	}
 	const r3 = await resumed.result;
 	const resumedRemembersName = r3.output.toLowerCase().includes("alice");
 
@@ -527,9 +591,7 @@ addTest("Tracing", async (model) => {
 		tools: [getTime],
 	});
 
-	const { result, trace } = await withTrace("test-trace", () =>
-		run(agent, "What time is it?"),
-	);
+	const { result, trace } = await withTrace("test-trace", () => run(agent, "What time is it?"));
 
 	const hasModelSpan = trace.spans.some((s) => s.type === "model_call");
 	const hasToolSpan = trace.spans.some((s) => s.type === "tool_execution");
@@ -669,4 +731,6 @@ for (const mr of modelResults) {
 
 const totalPassed = modelResults.reduce((a, mr) => a + mr.passed, 0);
 const totalTests = modelResults.reduce((a, mr) => a + mr.passed + mr.failed, 0);
-console.log(`\n  Total: ${totalPassed}/${totalTests} across ${modelResults.length} models in ${elapsed}s`);
+console.log(
+	`\n  Total: ${totalPassed}/${totalTests} across ${modelResults.length} models in ${elapsed}s`,
+);

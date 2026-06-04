@@ -12,8 +12,8 @@ import type { AgentHooks, RunHooks } from "./hooks";
 import type { AgentTool } from "./hosted-tool";
 import type { Model, StreamEvent } from "./model";
 import type { InterruptedRunResult, RunResult } from "./result";
-import { stream as coreStream } from "./run";
 import type { CallModelInputFilter, CanUseTool, ToolErrorFormatter } from "./run";
+import { stream as coreStream } from "./run";
 import type { SubAgent } from "./subagent";
 import type { ChatMessage, ContentPart, ModelSettings, ToolUseBehavior } from "./types";
 

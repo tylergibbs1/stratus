@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { createMockModel, textResponse, toolCallResponse } from "../../src/testing/index";
 

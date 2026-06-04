@@ -27,7 +27,8 @@ const getWeather = tool({
 
 const agent = new Agent({
 	name: "weather-assistant",
-	instructions: "You are a helpful weather assistant. Use the get_weather tool to answer weather questions.",
+	instructions:
+		"You are a helpful weather assistant. Use the get_weather tool to answer weather questions.",
 	model,
 	tools: [getWeather],
 });

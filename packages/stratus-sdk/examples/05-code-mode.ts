@@ -133,11 +133,11 @@ async function main() {
 					if (parsed.code) {
 						// Code mode result — show the generated code
 						console.log("\n📜 Generated code:");
-						console.log("┌" + "─".repeat(78) + "┐");
+						console.log(`┌${"─".repeat(78)}┐`);
 						for (const line of parsed.code.split("\n")) {
 							console.log(`│ ${line.padEnd(77)}│`);
 						}
-						console.log("└" + "─".repeat(78) + "┘");
+						console.log(`└${"─".repeat(78)}┘`);
 						// Show execution result
 						console.log("\n📦 Execution result:");
 						const pretty = JSON.stringify(parsed.result, null, 2);
@@ -166,7 +166,7 @@ async function main() {
 	}
 
 	const final = await result;
-	console.log("\n\n" + "─".repeat(60));
+	console.log(`\n\n${"─".repeat(60)}`);
 	console.log(`Turns: ${final.numTurns} | Tokens: ${final.usage.totalTokens}`);
 }
 

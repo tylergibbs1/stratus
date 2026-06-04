@@ -28,7 +28,13 @@ const MINIMAL_PDF = [
 describe("responses api parity", () => {
 	test("incomplete_details returned on truncated response", async () => {
 		const result = await model.getResponse({
-			messages: [{ role: "user", content: "Write a very long detailed essay about the entire history of computing from 1800 to 2025." }],
+			messages: [
+				{
+					role: "user",
+					content:
+						"Write a very long detailed essay about the entire history of computing from 1800 to 2025.",
+				},
+			],
 			modelSettings: { maxCompletionTokens: 20 },
 		});
 
@@ -63,12 +69,10 @@ describe("responses api parity", () => {
 
 	test("streaming completes with done event and response", async () => {
 		const events = [];
-		for await (const event of model.getStreamedResponse(
-			{
-				messages: [{ role: "user", content: "Say exactly: hello world" }],
-				modelSettings: { maxCompletionTokens: 50 },
-			},
-		)) {
+		for await (const event of model.getStreamedResponse({
+			messages: [{ role: "user", content: "Say exactly: hello world" }],
+			modelSettings: { maxCompletionTokens: 50 },
+		})) {
 			events.push(event);
 		}
 

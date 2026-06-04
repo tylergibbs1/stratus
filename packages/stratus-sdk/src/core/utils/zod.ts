@@ -1,4 +1,4 @@
-import { type ZodTypeAny, toJSONSchema } from "zod";
+import { toJSONSchema, type ZodTypeAny } from "zod";
 
 type JsonSchema = Record<string, unknown>;
 

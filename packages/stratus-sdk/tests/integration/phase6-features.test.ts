@@ -7,7 +7,7 @@ import { ToolTimeoutError } from "../../src/core/errors";
 import type { ToolInputGuardrail } from "../../src/core/guardrails";
 import { handoff } from "../../src/core/handoff";
 import type { RunHooks } from "../../src/core/hooks";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 
 const chatModel = new AzureChatCompletionsModel({

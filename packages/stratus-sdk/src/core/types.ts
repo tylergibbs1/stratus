@@ -10,7 +10,7 @@ export interface TextContentPart {
 
 export interface ImageContentPart {
 	type: "image_url";
-	image_url: { url: string; detail?: "auto" | "low" | "high" };
+	image_url: ({ url: string } | { file_id: string }) & { detail?: "auto" | "low" | "high" };
 }
 
 export interface FileContentPart {

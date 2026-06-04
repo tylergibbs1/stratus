@@ -1,20 +1,20 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { Agent } from "../../src/core/agent";
-import { run, stream } from "../../src/core/run";
-import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { tool } from "../../src/core/tool";
-import type { FunctionTool } from "../../src/core/tool";
-import type { HostedTool } from "../../src/core/hosted-tool";
+import type { Executor } from "../../src/core/codemode/executor";
 import {
 	createCodeModeTool,
 	FunctionExecutor,
-	WorkerExecutor,
 	generateTypes,
 	normalizeCode,
 	sanitizeToolName,
+	WorkerExecutor,
 } from "../../src/core/codemode/index";
-import type { Executor, ExecuteResult } from "../../src/core/codemode/executor";
+import type { HostedTool } from "../../src/core/hosted-tool";
+import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
+import { run, stream } from "../../src/core/run";
+import type { FunctionTool } from "../../src/core/tool";
+import { tool } from "../../src/core/tool";
 
 function mockModel(responses: ModelResponse[]): Model {
 	let callIndex = 0;
@@ -82,22 +82,22 @@ describe("sanitizeToolName", () => {
 
 describe("normalizeCode", () => {
 	test("passes through async arrow functions", () => {
-		const code = 'async () => { return await codemode.foo({ x: 1 }); }';
+		const code = "async () => { return await codemode.foo({ x: 1 }); }";
 		expect(normalizeCode(code)).toBe(code);
 	});
 
 	test("wraps bare statements", () => {
-		const code = 'const x = 1;\nconsole.log(x);';
+		const code = "const x = 1;\nconsole.log(x);";
 		expect(normalizeCode(code)).toBe(`async () => {\n${code}\n}`);
 	});
 
 	test("strips markdown code fences", () => {
-		const code = '```javascript\nconst x = 1;\n```';
+		const code = "```javascript\nconst x = 1;\n```";
 		expect(normalizeCode(code)).toBe("async () => {\nconst x = 1;\n}");
 	});
 
 	test("strips ts code fences", () => {
-		const code = '```ts\nconst x = 1;\n```';
+		const code = "```ts\nconst x = 1;\n```";
 		expect(normalizeCode(code)).toBe("async () => {\nconst x = 1;\n}");
 	});
 
@@ -107,7 +107,7 @@ describe("normalizeCode", () => {
 	});
 
 	test("handles async arrow with parenthesized params", () => {
-		const code = 'async (arg) => { return arg; }';
+		const code = "async (arg) => { return arg; }";
 		// starts with `async (` and contains `=>`, so passes through
 		expect(normalizeCode(code)).toBe(code);
 	});
@@ -300,10 +300,7 @@ describe("FunctionExecutor", () => {
 
 	test("returns error for failing code", async () => {
 		const executor = new FunctionExecutor();
-		const result = await executor.execute(
-			'async () => { throw new Error("boom"); }',
-			{},
-		);
+		const result = await executor.execute('async () => { throw new Error("boom"); }', {});
 		expect(result.error).toBe("boom");
 		expect(result.result).toBeUndefined();
 	});
@@ -315,10 +312,7 @@ describe("FunctionExecutor", () => {
 				throw new Error("tool failed");
 			},
 		};
-		const result = await executor.execute(
-			"async () => { return await codemode.fail(); }",
-			fns,
-		);
+		const result = await executor.execute("async () => { return await codemode.fail(); }", fns);
 		expect(result.error).toBe("tool failed");
 	});
 
@@ -432,7 +426,9 @@ describe("createCodeModeTool", () => {
 		});
 		const resultStr = await codeTool.execute(
 			{},
-			{ code: 'async () => { const w = await codemode.get_weather({ location: "NYC" }); return w; }' },
+			{
+				code: 'async () => { const w = await codemode.get_weather({ location: "NYC" }); return w; }',
+			},
 		);
 		const result = JSON.parse(resultStr);
 		expect(result.result).toEqual({ temp: 72, city: "NYC" });
@@ -446,10 +442,7 @@ describe("createCodeModeTool", () => {
 		});
 		// Missing required 'location' param — Zod validation error surfaces as execution failure
 		await expect(
-			codeTool.execute(
-				{},
-				{ code: "async () => { return await codemode.get_weather({}); }" },
-			),
+			codeTool.execute({}, { code: "async () => { return await codemode.get_weather({}); }" }),
 		).rejects.toThrow("Code execution failed");
 	});
 
@@ -460,10 +453,7 @@ describe("createCodeModeTool", () => {
 			executor,
 		});
 		await expect(
-			codeTool.execute(
-				{},
-				{ code: 'async () => { throw new Error("boom"); }' },
-			),
+			codeTool.execute({}, { code: 'async () => { throw new Error("boom"); }' }),
 		).rejects.toThrow("Code execution failed: boom");
 	});
 
@@ -551,7 +541,7 @@ describe("createCodeModeTool", () => {
 describe("custom Executor", () => {
 	test("works with a custom executor implementation", async () => {
 		const customExecutor: Executor = {
-			async execute(code, fns) {
+			async execute(_code, _fns) {
 				// Simple custom executor that just returns a fixed result
 				return { result: "custom-result", logs: ["custom-log"] };
 			},
@@ -601,25 +591,29 @@ describe("codemode with Agent run()", () => {
 	}
 
 	test("LLM calls execute_code → single tool call → final response", async () => {
-		const code = 'async () => { const w = await codemode.get_weather({ location: "NYC" }); return w; }';
-		const agent = makeCodeModeAgent([weatherTool], [
-			// Turn 1: LLM decides to write code
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc1",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code }) },
-					},
-				],
-			},
-			// Turn 2: LLM reads the code result and responds
-			{
-				content: "The weather in NYC is 72°F.",
-				toolCalls: [],
-			},
-		]);
+		const code =
+			'async () => { const w = await codemode.get_weather({ location: "NYC" }); return w; }';
+		const agent = makeCodeModeAgent(
+			[weatherTool],
+			[
+				// Turn 1: LLM decides to write code
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc1",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code }) },
+						},
+					],
+				},
+				// Turn 2: LLM reads the code result and responds
+				{
+					content: "The weather in NYC is 72°F.",
+					toolCalls: [],
+				},
+			],
+		);
 
 		const result = await run(agent, "What's the weather in NYC?");
 		expect(result.output).toBe("The weather in NYC is 72°F.");
@@ -646,22 +640,25 @@ describe("codemode with Agent run()", () => {
 			return { weather, email: null };
 		}`;
 
-		const agent = makeCodeModeAgent([weatherTool, emailTool], [
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc1",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code }) },
-					},
-				],
-			},
-			{
-				content: "I checked the weather in London (72°F) and sent an email to the team.",
-				toolCalls: [],
-			},
-		]);
+		const agent = makeCodeModeAgent(
+			[weatherTool, emailTool],
+			[
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc1",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code }) },
+						},
+					],
+				},
+				{
+					content: "I checked the weather in London (72°F) and sent an email to the team.",
+					toolCalls: [],
+				},
+			],
+		);
 
 		const result = await run(agent, "Check London weather and email the team if it's nice");
 		expect(result.output).toContain("72°F");
@@ -679,35 +676,38 @@ describe("codemode with Agent run()", () => {
 		const code = 'async () => { throw new Error("oops"); }';
 		const retryCode = 'async () => { return await codemode.get_weather({ location: "SF" }); }';
 
-		const agent = makeCodeModeAgent([weatherTool], [
-			// Turn 1: LLM writes bad code
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc1",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code }) },
-					},
-				],
-			},
-			// Turn 2: LLM sees the error, retries with correct code
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc2",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code: retryCode }) },
-					},
-				],
-			},
-			// Turn 3: LLM responds with the result
-			{
-				content: "The weather in SF is 72°F.",
-				toolCalls: [],
-			},
-		]);
+		const agent = makeCodeModeAgent(
+			[weatherTool],
+			[
+				// Turn 1: LLM writes bad code
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc1",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code }) },
+						},
+					],
+				},
+				// Turn 2: LLM sees the error, retries with correct code
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc2",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code: retryCode }) },
+						},
+					],
+				},
+				// Turn 3: LLM responds with the result
+				{
+					content: "The weather in SF is 72°F.",
+					toolCalls: [],
+				},
+			],
+		);
 
 		const result = await run(agent, "What's the weather?");
 		expect(result.output).toBe("The weather in SF is 72°F.");
@@ -753,22 +753,25 @@ describe("codemode with Agent run()", () => {
 
 	test("stream() works with codemode tool", async () => {
 		const code = 'async () => { return await codemode.get_weather({ location: "Paris" }); }';
-		const agent = makeCodeModeAgent([weatherTool], [
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc1",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code }) },
-					},
-				],
-			},
-			{
-				content: "Paris is 72°F.",
-				toolCalls: [],
-			},
-		]);
+		const agent = makeCodeModeAgent(
+			[weatherTool],
+			[
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc1",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code }) },
+						},
+					],
+				},
+				{
+					content: "Paris is 72°F.",
+					toolCalls: [],
+				},
+			],
+		);
 
 		const events: StreamEvent[] = [];
 		const { stream: s, result: resultPromise } = stream(agent, "Weather in Paris?");
@@ -804,22 +807,25 @@ describe("codemode with Agent run()", () => {
 			return results;
 		}`;
 
-		const agent = makeCodeModeAgent([cityTool], [
-			{
-				content: null,
-				toolCalls: [
-					{
-						id: "tc1",
-						type: "function",
-						function: { name: "execute_code", arguments: JSON.stringify({ code }) },
-					},
-				],
-			},
-			{
-				content: "Got weather for all 3 cities.",
-				toolCalls: [],
-			},
-		]);
+		const agent = makeCodeModeAgent(
+			[cityTool],
+			[
+				{
+					content: null,
+					toolCalls: [
+						{
+							id: "tc1",
+							type: "function",
+							function: { name: "execute_code", arguments: JSON.stringify({ code }) },
+						},
+					],
+				},
+				{
+					content: "Got weather for all 3 cities.",
+					toolCalls: [],
+				},
+			],
+		);
 
 		const result = await run(agent, "Get weather for NYC, London, Tokyo");
 		expect(result.output).toBe("Got weather for all 3 cities.");
@@ -974,7 +980,7 @@ describe("codemode edge cases", () => {
 		// Should escape the */ inside the description to prevent breaking JSDoc
 		expect(types).toContain("*\\/");
 		// The original unescaped */ from the description should not appear mid-comment
-		expect(types).not.toContain('and */ jsdoc');
+		expect(types).not.toContain("and */ jsdoc");
 	});
 
 	test("generateTypes handles boolean parameters", () => {
@@ -1134,10 +1140,7 @@ describe("codemode edge cases", () => {
 				throw "raw string rejection";
 			},
 		};
-		const result = await executor.execute(
-			"async () => { return await codemode.bad(); }",
-			fns,
-		);
+		const result = await executor.execute("async () => { return await codemode.bad(); }", fns);
 		expect(result.error).toBe("raw string rejection");
 	});
 
@@ -1494,10 +1497,7 @@ describe("WorkerExecutor", () => {
 
 	test("returns error for failing code", async () => {
 		const executor = new WorkerExecutor();
-		const result = await executor.execute(
-			'async () => { throw new Error("boom"); }',
-			{},
-		);
+		const result = await executor.execute('async () => { throw new Error("boom"); }', {});
 		expect(result.error).toBe("boom");
 		expect(result.result).toBeUndefined();
 	});
@@ -1509,10 +1509,7 @@ describe("WorkerExecutor", () => {
 				throw new Error("tool failed");
 			},
 		};
-		const result = await executor.execute(
-			"async () => { return await codemode.fail(); }",
-			fns,
-		);
+		const result = await executor.execute("async () => { return await codemode.fail(); }", fns);
 		expect(result.error).toBe("tool failed");
 	});
 
@@ -1631,10 +1628,7 @@ describe("WorkerExecutor", () => {
 				throw "raw string rejection";
 			},
 		};
-		const result = await executor.execute(
-			"async () => { return await codemode.bad(); }",
-			fns,
-		);
+		const result = await executor.execute("async () => { return await codemode.bad(); }", fns);
 		expect(result.error).toBe("raw string rejection");
 	});
 
@@ -1671,10 +1665,7 @@ describe("WorkerExecutor", () => {
 
 	test("times out on infinite loop", async () => {
 		const executor = new WorkerExecutor({ timeout: 300 });
-		const result = await executor.execute(
-			"async () => { while (true) {} }",
-			{},
-		);
+		const result = await executor.execute("async () => { while (true) {} }", {});
 		expect(result.error).toBe("Execution timed out");
 	});
 
@@ -1696,10 +1687,7 @@ describe("WorkerExecutor", () => {
 				return "slow result";
 			},
 		};
-		const result = await executor.execute(
-			"async () => { return await codemode.slow(); }",
-			fns,
-		);
+		const result = await executor.execute("async () => { return await codemode.slow(); }", fns);
 		expect(result.result).toBe("slow result");
 	});
 

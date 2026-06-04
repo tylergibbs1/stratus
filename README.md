@@ -126,6 +126,31 @@ for await (const event of s) {
 const finalResult = await result;
 ```
 
+### Vercel AI SDK Interop
+
+Use `@usestratus/sdk/ai-sdk` to connect Stratus agents to AI SDK UI streams without adding `ai` as a required runtime dependency:
+
+```ts
+import { Agent, createModel } from "@usestratus/sdk";
+import {
+  createStratusChatResponse,
+  type AISDKUIMessage,
+} from "@usestratus/sdk/ai-sdk";
+
+const agent = new Agent({
+  name: "assistant",
+  instructions: "You are helpful and concise.",
+  model: createModel(),
+});
+
+export async function POST(req: Request) {
+  const { messages }: { messages: AISDKUIMessage[] } = await req.json();
+  return createStratusChatResponse({ agent, messages });
+}
+```
+
+The interop package also includes helpers for `UIMessage` history conversion, tool approval resume flows, AI SDK-style model adapters, and OpenAI Agents-style stream event projection.
+
 ### Structured Output
 
 Use Zod schemas to get typed, validated output:

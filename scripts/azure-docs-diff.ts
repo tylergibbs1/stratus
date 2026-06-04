@@ -41,9 +41,7 @@ db.run(`
     content   TEXT    NOT NULL
   )
 `);
-db.run(
-	"CREATE INDEX IF NOT EXISTS idx_snapshots_slug ON snapshots(slug, fetched DESC)",
-);
+db.run("CREATE INDEX IF NOT EXISTS idx_snapshots_slug ON snapshots(slug, fetched DESC)");
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,12 +80,7 @@ function getPrevious(slug: string): string | null {
 }
 
 function save(slug: string, url: string, content: string) {
-	db.run(
-		"INSERT INTO snapshots (slug, url, content) VALUES (?, ?, ?)",
-		slug,
-		url,
-		content,
-	);
+	db.run("INSERT INTO snapshots (slug, url, content) VALUES (?, ?, ?)", slug, url, content);
 }
 
 function printDiff(slug: string, oldText: string, newText: string) {
@@ -117,10 +110,9 @@ function printDiff(slug: string, oldText: string, newText: string) {
 
 if (process.argv.includes("--list")) {
 	const rows = db
-		.query<
-			{ slug: string; fetched: string; len: number },
-			[]
-		>("SELECT slug, fetched, length(content) as len FROM snapshots ORDER BY fetched DESC LIMIT 30")
+		.query<{ slug: string; fetched: string; len: number }, []>(
+			"SELECT slug, fetched, length(content) as len FROM snapshots ORDER BY fetched DESC LIMIT 30",
+		)
 		.all();
 	console.log("Recent snapshots:");
 	for (const r of rows) {
@@ -137,8 +129,7 @@ const results = await Promise.all(
 	PAGES.map(async ({ slug, url }) => {
 		const res = await fetch(url, {
 			headers: {
-				"User-Agent":
-					"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) stratus-docs-tracker/1.0",
+				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) stratus-docs-tracker/1.0",
 			},
 		});
 		if (!res.ok) {

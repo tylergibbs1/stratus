@@ -10,13 +10,13 @@ import {
 	StratusError,
 	ToolTimeoutError,
 } from "./errors";
+import type { GuardrailRunResult, ToolInputGuardrail, ToolOutputGuardrail } from "./guardrails";
 import {
 	runInputGuardrails,
 	runOutputGuardrails,
 	runToolInputGuardrails,
 	runToolOutputGuardrails,
 } from "./guardrails";
-import type { GuardrailRunResult, ToolInputGuardrail, ToolOutputGuardrail } from "./guardrails";
 import { handoffToDefinition } from "./handoff";
 import type {
 	AfterToolCallHook,
@@ -37,12 +37,12 @@ import type {
 	StreamEvent,
 	UsageInfo,
 } from "./model";
-import { InterruptedRunResult, RunResult } from "./result";
 import type { PendingToolCall } from "./result";
-import { subagentToDefinition, subagentToTool } from "./subagent";
+import { InterruptedRunResult, RunResult } from "./result";
 import type { SubAgent } from "./subagent";
-import { toolToDefinition } from "./tool";
+import { subagentToDefinition, subagentToTool } from "./subagent";
 import type { FunctionTool } from "./tool";
+import { toolToDefinition } from "./tool";
 
 import { getCurrentTrace } from "./tracing";
 import type {
@@ -1684,7 +1684,7 @@ export async function resumeRun<TContext, TOutput = undefined>(
 
 	// The last message should be the assistant message with tool_calls
 	const lastMsg = messages[messages.length - 1];
-	if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.tool_calls) {
+	if (lastMsg?.role !== "assistant" || !lastMsg.tool_calls) {
 		throw new StratusError(
 			"Cannot resume: last message is not an assistant message with tool_calls",
 		);

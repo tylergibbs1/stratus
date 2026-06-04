@@ -3,10 +3,9 @@ import { z } from "zod";
 import { AzureResponsesModel } from "../../src/azure/responses-model";
 import { Agent } from "../../src/core/agent";
 import { MemorySessionStore } from "../../src/core/memory-store";
-import type { InterruptedRunResult } from "../../src/core/result";
-import { run, stream, resumeRun } from "../../src/core/run";
-import { createSession, loadSession } from "../../src/core/session";
+import { resumeRun, run, stream } from "../../src/core/run";
 import type { SessionStateChangeEvent } from "../../src/core/session";
+import { createSession, loadSession } from "../../src/core/session";
 import { subagent } from "../../src/core/subagent";
 import { tool } from "../../src/core/tool";
 
@@ -195,10 +194,10 @@ describe("SessionStore (real API)", () => {
 		});
 
 		session.send("What is 2+2? Reply with just the number.");
-		for await (const event of session.stream()) {
+		for await (const _event of session.stream()) {
 			// consume stream
 		}
-		const result = await session.result;
+		const _result = await session.result;
 
 		// Verify auto-saved
 		const snapshot = await store.load("test-session-1");
@@ -213,7 +212,7 @@ describe("SessionStore (real API)", () => {
 
 		// Continue conversation
 		loaded!.send("What was my previous question? Reply in one sentence.");
-		for await (const event of loaded!.stream()) {
+		for await (const _event of loaded!.stream()) {
 			// consume
 		}
 		const result2 = await loaded!.result;
@@ -232,7 +231,7 @@ describe("session state change events (real API)", () => {
 		});
 
 		session.send("Say hello");
-		for await (const event of session.stream()) {
+		for await (const _event of session.stream()) {
 			// consume
 		}
 		await session.result;

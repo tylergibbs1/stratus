@@ -8,7 +8,7 @@ import {
 import type { InputGuardrail, OutputGuardrail } from "../../src/core/guardrails";
 import { handoff } from "../../src/core/handoff";
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from "../../src/core/model";
-import { stream, run } from "../../src/core/run";
+import { run, stream } from "../../src/core/run";
 import { tool } from "../../src/core/tool";
 import { withTrace } from "../../src/core/tracing";
 

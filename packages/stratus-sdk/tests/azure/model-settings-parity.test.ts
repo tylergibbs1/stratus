@@ -148,9 +148,7 @@ describe("AzureResponsesModel context management", () => {
 		});
 
 		const body = JSON.parse((fetchFn.mock.calls[0] as any)[1].body);
-		expect(body.context_management).toEqual([
-			{ type: "truncation", truncation_strategy: "auto" },
-		]);
+		expect(body.context_management).toEqual([{ type: "truncation", truncation_strategy: "auto" }]);
 	});
 
 	test("does not send context_management when not set", async () => {

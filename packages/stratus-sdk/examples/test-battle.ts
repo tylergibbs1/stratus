@@ -3,27 +3,20 @@ import {
 	Agent,
 	AzureChatCompletionsModel,
 	AzureResponsesModel,
+	createCostEstimator,
+	createSession,
+	forkSession,
+	MaxBudgetExceededError,
+	MaxTurnsExceededError,
+	OutputGuardrailTripwireTriggered,
+	RunAbortedError,
 	run,
 	stream,
-	tool,
-	handoff,
 	subagent,
-	todoTool,
-	TodoList,
-	createSession,
-	resumeSession,
-	forkSession,
+	tool,
 	withTrace,
-	createCostEstimator,
-	RunAbortedError,
-	MaxTurnsExceededError,
-	MaxBudgetExceededError,
-	InputGuardrailTripwireTriggered,
-	OutputGuardrailTripwireTriggered,
-	OutputParseError,
-	ModelError,
 } from "../src";
-import type { InputGuardrail, OutputGuardrail } from "../src/core/guardrails";
+import type { OutputGuardrail } from "../src/core/guardrails";
 import type { Model } from "../src/core/model";
 
 // ── Model configs ──
@@ -50,8 +43,16 @@ try {
 			name: `${c.name} (${label})`,
 			factory: () =>
 				type === "responses"
-					? new AzureResponsesModel({ endpoint: c.endpoint, apiKey: c.apiKey, deployment: c.deployment })
-					: new AzureChatCompletionsModel({ endpoint: c.endpoint, apiKey: c.apiKey, deployment: c.deployment }),
+					? new AzureResponsesModel({
+							endpoint: c.endpoint,
+							apiKey: c.apiKey,
+							deployment: c.deployment,
+						})
+					: new AzureChatCompletionsModel({
+							endpoint: c.endpoint,
+							apiKey: c.apiKey,
+							deployment: c.deployment,
+						}),
 		});
 	}
 } catch {}
@@ -63,14 +64,24 @@ const aoaiDeployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat";
 if (aoaiEndpoint && aoaiKey) {
 	models.push({
 		name: `${aoaiDeployment} (ChatCompletions)`,
-		factory: () => new AzureChatCompletionsModel({ endpoint: aoaiEndpoint, apiKey: aoaiKey, deployment: aoaiDeployment }),
+		factory: () =>
+			new AzureChatCompletionsModel({
+				endpoint: aoaiEndpoint,
+				apiKey: aoaiKey,
+				deployment: aoaiDeployment,
+			}),
 	});
 	const respDeployment = process.env.AZURE_OPENAI_RESPONSES_DEPLOYMENT ?? aoaiDeployment;
 	const respEndpoint = process.env.AZURE_OPENAI_RESPONSES_ENDPOINT ?? aoaiEndpoint;
 	const respKey = process.env.AZURE_OPENAI_RESPONSES_API_KEY ?? aoaiKey;
 	models.push({
 		name: `${respDeployment} (Responses)`,
-		factory: () => new AzureResponsesModel({ endpoint: respEndpoint, apiKey: respKey, deployment: respDeployment }),
+		factory: () =>
+			new AzureResponsesModel({
+				endpoint: respEndpoint,
+				apiKey: respKey,
+				deployment: respDeployment,
+			}),
 	});
 }
 
@@ -128,7 +139,10 @@ addTest("Large tool output", async (model) => {
 		description: "Returns a large dataset",
 		parameters: z.object({}),
 		execute: async () => {
-			const items = Array.from({ length: 200 }, (_, i) => `Item ${i + 1}: $${(Math.random() * 100).toFixed(2)}`);
+			const items = Array.from(
+				{ length: 200 },
+				(_, i) => `Item ${i + 1}: $${(Math.random() * 100).toFixed(2)}`,
+			);
 			return items.join("\n"); // ~5KB
 		},
 	});
@@ -168,7 +182,8 @@ addTest("Concurrent sessions", async (model) => {
 
 	// Stream all concurrently
 	const drain = async (s: ReturnType<typeof createSession>) => {
-		for await (const _ of s.stream()) {}
+		for await (const _ of s.stream()) {
+		}
 		return s.result;
 	};
 
@@ -178,7 +193,9 @@ addTest("Concurrent sessions", async (model) => {
 	const bobOk = r2.output.toLowerCase().includes("bob");
 	const charlieOk = r3.output.toLowerCase().includes("charlie");
 
-	s1.close(); s2.close(); s3.close();
+	s1.close();
+	s2.close();
+	s3.close();
 
 	return {
 		pass: aliceOk && bobOk && charlieOk,
@@ -205,7 +222,8 @@ addTest("Long multi-turn session", async (model) => {
 	let lastOutput = "";
 	for (const msg of turns) {
 		session.send(msg);
-		for await (const _ of session.stream()) {}
+		for await (const _ of session.stream()) {
+		}
 		const r = await session.result;
 		lastOutput = r.output;
 	}
@@ -267,7 +285,8 @@ addTest("Budget limit mid-run", async (model) => {
 		name: "get_info",
 		description: "Get information about a topic",
 		parameters: z.object({ topic: z.string() }),
-		execute: async (_ctx, { topic }) => `Here is a long detailed response about ${topic}. `.repeat(10),
+		execute: async (_ctx, { topic }) =>
+			`Here is a long detailed response about ${topic}. `.repeat(10),
 	});
 
 	const agent = new Agent({
@@ -341,7 +360,9 @@ addTest("Subagent failure handling", async (model) => {
 				name: "crash",
 				description: "This tool always crashes",
 				parameters: z.object({}),
-				execute: async () => { throw new Error("Catastrophic failure!"); },
+				execute: async () => {
+					throw new Error("Catastrophic failure!");
+				},
 			}),
 		],
 		// Force it to call the crashing tool
@@ -350,7 +371,8 @@ addTest("Subagent failure handling", async (model) => {
 
 	const parentAgent = new Agent({
 		name: "coordinator",
-		instructions: "Use the run_failing_researcher tool. If it fails, say 'The sub-task failed' and explain what happened.",
+		instructions:
+			"Use the run_failing_researcher tool. If it fails, say 'The sub-task failed' and explain what happened.",
 		model,
 		subagents: [
 			subagent({
@@ -413,11 +435,15 @@ addTest("Guardrail after handoff", async (model) => {
 // 10. Structured output parse failure — model returns bad JSON
 addTest("Structured output recovery", async (model) => {
 	const StrictSchema = z.object({
-		items: z.array(z.object({
-			name: z.string(),
-			price: z.number().positive(),
-			inStock: z.boolean(),
-		})).min(1),
+		items: z
+			.array(
+				z.object({
+					name: z.string(),
+					price: z.number().positive(),
+					inStock: z.boolean(),
+				}),
+			)
+			.min(1),
 	});
 
 	const agent = new Agent({
@@ -428,8 +454,12 @@ addTest("Structured output recovery", async (model) => {
 	});
 
 	// Give it clean data — should parse fine
-	const result = await run(agent, 'Products: Widget ($9.99, in stock), Gadget ($24.50, out of stock)');
-	const valid = result.finalOutput !== undefined &&
+	const result = await run(
+		agent,
+		"Products: Widget ($9.99, in stock), Gadget ($24.50, out of stock)",
+	);
+	const valid =
+		result.finalOutput !== undefined &&
 		Array.isArray(result.finalOutput.items) &&
 		result.finalOutput.items.length >= 1;
 
@@ -444,29 +474,34 @@ addTest("Parallel tool calls", async (model) => {
 	const callOrder: string[] = [];
 	const callTimes: Record<string, number> = {};
 
-	const slowTool = (name: string, delayMs: number) => tool({
-		name,
-		description: `Get ${name} data`,
-		parameters: z.object({}),
-		execute: async () => {
-			const start = Date.now();
-			callOrder.push(name);
-			await new Promise((r) => setTimeout(r, delayMs));
-			callTimes[name] = Date.now() - start;
-			return `${name} result`;
-		},
-	});
+	const slowTool = (name: string, delayMs: number) =>
+		tool({
+			name,
+			description: `Get ${name} data`,
+			parameters: z.object({}),
+			execute: async () => {
+				const start = Date.now();
+				callOrder.push(name);
+				await new Promise((r) => setTimeout(r, delayMs));
+				callTimes[name] = Date.now() - start;
+				return `${name} result`;
+			},
+		});
 
 	const agent = new Agent({
 		name: "parallel-bot",
-		instructions: "Call ALL three tools (get_weather, get_news, get_stocks) simultaneously in a single response. Then summarize results.",
+		instructions:
+			"Call ALL three tools (get_weather, get_news, get_stocks) simultaneously in a single response. Then summarize results.",
 		model,
 		tools: [slowTool("get_weather", 100), slowTool("get_news", 100), slowTool("get_stocks", 100)],
 		modelSettings: { parallelToolCalls: true },
 	});
 
 	const result = await run(agent, "Give me weather, news, and stocks", { maxTurns: 4 });
-	const allCalled = callOrder.includes("get_weather") && callOrder.includes("get_news") && callOrder.includes("get_stocks");
+	const allCalled =
+		callOrder.includes("get_weather") &&
+		callOrder.includes("get_news") &&
+		callOrder.includes("get_stocks");
 
 	return {
 		pass: allCalled && result.output.length > 0,
@@ -495,7 +530,8 @@ addTest("Hook denies tool call", async (model) => {
 
 	const agent = new Agent({
 		name: "guarded-bot",
-		instructions: "Use safe_lookup for queries. If asked to delete, use delete_data. Always try to help.",
+		instructions:
+			"Use safe_lookup for queries. If asked to delete, use delete_data. Always try to help.",
 		model,
 		tools: [safeTool, dangerousTool],
 		hooks: {
@@ -549,7 +585,7 @@ addTest("Hook modifies tool params", async (model) => {
 		},
 	});
 
-	const result = await run(agent, "Search for quantum computing");
+	const _result = await run(agent, "Search for quantum computing");
 	const wasModified = executedQuery.includes("site:wikipedia.org");
 	return {
 		pass: wasModified && executedQuery.length > 0,
@@ -565,13 +601,15 @@ addTest("Session fork divergence", async (model) => {
 	});
 
 	session.send("I'm planning a trip. I like beaches.");
-	for await (const _ of session.stream()) {}
+	for await (const _ of session.stream()) {
+	}
 
 	const snapshot = session.save();
 
 	// Original continues with beaches
 	session.send("Suggest a beach destination. One word.");
-	for await (const _ of session.stream()) {}
+	for await (const _ of session.stream()) {
+	}
 	const beachResult = await session.result;
 
 	// Fork goes to mountains
@@ -580,7 +618,8 @@ addTest("Session fork divergence", async (model) => {
 		instructions: "You are a helpful assistant. Be very concise.",
 	});
 	forked.send("Actually I changed my mind, I want mountains. Suggest one. One word.");
-	for await (const _ of forked.stream()) {}
+	for await (const _ of forked.stream()) {
+	}
 	const mountainResult = await forked.result;
 
 	session.close();
@@ -618,7 +657,7 @@ addTest("Tracing full span coverage", async (model) => {
 		handoffs: [orderAgent],
 	});
 
-	const { result, trace } = await withTrace("battle-trace", () =>
+	const { result: _result, trace } = await withTrace("battle-trace", () =>
 		run(triageAgent, "Where is order #12345?", { maxTurns: 6 }),
 	);
 
@@ -765,4 +804,6 @@ for (const mr of modelResults) {
 }
 const totalPassed = modelResults.reduce((a, mr) => a + mr.passed, 0);
 const totalTests = modelResults.reduce((a, mr) => a + mr.passed + mr.failed, 0);
-console.log(`\n  Total: ${totalPassed}/${totalTests} across ${modelResults.length} models in ${elapsed}s`);
+console.log(
+	`\n  Total: ${totalPassed}/${totalTests} across ${modelResults.length} models in ${elapsed}s`,
+);

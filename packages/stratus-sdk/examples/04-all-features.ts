@@ -1,13 +1,7 @@
 import { z } from "zod";
-import {
-	Agent,
-	AzureChatCompletionsModel,
-	run,
-	tool,
-	withTrace,
-} from "../src";
-import type { AgentHooks } from "../src/core/hooks";
+import { Agent, AzureChatCompletionsModel, run, tool, withTrace } from "../src";
 import type { InputGuardrail, OutputGuardrail } from "../src/core/guardrails";
+import type { AgentHooks } from "../src/core/hooks";
 
 const model = new AzureChatCompletionsModel({
 	endpoint: process.env.AZURE_OPENAI_ENDPOINT!,
@@ -15,6 +9,62 @@ const model = new AzureChatCompletionsModel({
 	deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-5-chat",
 	apiVersion: process.env.AZURE_OPENAI_API_VERSION,
 });
+
+function calculate(expression: string): string {
+	const compact = expression.replace(/\s+/g, "");
+	const tokens = compact.match(/\d+(?:\.\d+)?|[+\-*/()]/g);
+	if (!tokens || tokens.join("") !== compact) return "Could not evaluate";
+
+	let index = 0;
+	const current = () => tokens[index];
+
+	const parseFactor = (): number => {
+		const token = current();
+		if (token === undefined) throw new Error("Unexpected end");
+		if (token === "-") {
+			index++;
+			return -parseFactor();
+		}
+		if (token === "(") {
+			index++;
+			const value = parseExpression();
+			if (current() !== ")") throw new Error("Expected closing parenthesis");
+			index++;
+			return value;
+		}
+		index++;
+		return Number(token);
+	};
+
+	const parseTerm = (): number => {
+		let value = parseFactor();
+		while (current() === "*" || current() === "/") {
+			const operator = current();
+			index++;
+			const next = parseFactor();
+			value = operator === "*" ? value * next : value / next;
+		}
+		return value;
+	};
+
+	function parseExpression(): number {
+		let value = parseTerm();
+		while (current() === "+" || current() === "-") {
+			const operator = current();
+			index++;
+			const next = parseTerm();
+			value = operator === "+" ? value + next : value - next;
+		}
+		return value;
+	}
+
+	try {
+		const value = parseExpression();
+		return index === tokens.length && Number.isFinite(value) ? String(value) : "Could not evaluate";
+	} catch {
+		return "Could not evaluate";
+	}
+}
 
 // ---- Feature 1: Structured Output ----
 async function testStructuredOutput() {
@@ -48,18 +98,13 @@ async function testHandoffs() {
 		name: "calculate",
 		description: "Calculate a math expression",
 		parameters: z.object({ expression: z.string() }),
-		execute: async (_ctx, { expression }) => {
-			try {
-				return String(eval(expression));
-			} catch {
-				return "Could not evaluate";
-			}
-		},
+		execute: async (_ctx, { expression }) => calculate(expression),
 	});
 
 	const mathAgent = new Agent({
 		name: "math_expert",
-		instructions: "You are a math expert. Use the calculate tool to solve math problems. Be concise.",
+		instructions:
+			"You are a math expert. Use the calculate tool to solve math problems. Be concise.",
 		model,
 		tools: [mathTool],
 		handoffDescription: "Transfer to math expert for calculations",
@@ -67,7 +112,8 @@ async function testHandoffs() {
 
 	const router = new Agent({
 		name: "router",
-		instructions: "You are a router. For any math question, transfer to the math expert immediately.",
+		instructions:
+			"You are a router. For any math question, transfer to the math expert immediately.",
 		model,
 		handoffs: [mathAgent],
 	});
@@ -165,10 +211,22 @@ async function testHooks() {
 	for (const event of events) {
 		console.log("  -", event);
 	}
-	console.log("beforeRun fired:", events.some((e) => e.startsWith("beforeRun")));
-	console.log("afterRun fired:", events.some((e) => e.startsWith("afterRun")));
-	console.log("beforeToolCall fired:", events.some((e) => e.startsWith("beforeToolCall")));
-	console.log("afterToolCall fired:", events.some((e) => e.startsWith("afterToolCall")));
+	console.log(
+		"beforeRun fired:",
+		events.some((e) => e.startsWith("beforeRun")),
+	);
+	console.log(
+		"afterRun fired:",
+		events.some((e) => e.startsWith("afterRun")),
+	);
+	console.log(
+		"beforeToolCall fired:",
+		events.some((e) => e.startsWith("beforeToolCall")),
+	);
+	console.log(
+		"afterToolCall fired:",
+		events.some((e) => e.startsWith("afterToolCall")),
+	);
 	console.log("PASS\n");
 }
 
@@ -201,8 +259,14 @@ async function testTracing() {
 	for (const span of trace.spans) {
 		console.log(`  - [${span.type}] ${span.name} (${span.duration.toFixed(0)}ms)`);
 	}
-	console.log("Has model_call spans:", trace.spans.some((s) => s.type === "model_call"));
-	console.log("Has tool_execution spans:", trace.spans.some((s) => s.type === "tool_execution"));
+	console.log(
+		"Has model_call spans:",
+		trace.spans.some((s) => s.type === "model_call"),
+	);
+	console.log(
+		"Has tool_execution spans:",
+		trace.spans.some((s) => s.type === "tool_execution"),
+	);
 	console.log("Output:", result.output);
 	console.log("PASS\n");
 }
