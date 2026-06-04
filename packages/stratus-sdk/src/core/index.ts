@@ -174,12 +174,37 @@ export { zodToJsonSchema } from "./utils/zod";
 export type { ValidationResult } from "./validate-agent";
 export { validateAgent } from "./validate-agent";
 export type {
+	GenerateWorkflowDraftOptions,
+	WorkflowDraft,
+	WorkflowDraftPhase,
+} from "./workflow-draft";
+export { generateWorkflowDraft } from "./workflow-draft";
+export type { ManagedWorkflowRunStatus, WorkflowRunHandle } from "./workflow-manager";
+export { WorkflowRunManager } from "./workflow-manager";
+export type {
+	DiscoverSavedWorkflowsOptions,
+	LoadedWorkflowModule,
+	SavedWorkflowInfo,
+	SavedWorkflowScope,
+} from "./workflow-saved";
+export { discoverSavedWorkflows, loadWorkflowModule } from "./workflow-saved";
+export type {
 	StreamedWorkflowResult,
 	Workflow,
+	WorkflowAdversarialVerificationConfig,
+	WorkflowAdversarialVerificationResult,
 	WorkflowAgentTask,
+	WorkflowBudget,
 	WorkflowConfig,
 	WorkflowEvent,
+	WorkflowFanOutAndSynthesizeConfig,
+	WorkflowFanOutAndSynthesizeResult,
 	WorkflowFunctionTask,
+	WorkflowGenerateAndFilterConfig,
+	WorkflowGenerateAndFilterResult,
+	WorkflowLoopStepResult,
+	WorkflowLoopUntilDoneConfig,
+	WorkflowLoopUntilDoneResult,
 	WorkflowOptions,
 	WorkflowPhaseOptions,
 	WorkflowPhaseResult,
@@ -188,6 +213,8 @@ export type {
 	WorkflowRunSnapshot,
 	WorkflowRunStatus,
 	WorkflowRuntimeContext,
+	WorkflowTournamentConfig,
+	WorkflowTournamentResult,
 	WorkflowTask,
 	WorkflowTaskBase,
 	WorkflowTaskExecuteParams,
