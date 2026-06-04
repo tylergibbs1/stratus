@@ -141,7 +141,6 @@ export {
 	TraceContext,
 	withTrace,
 } from "./tracing";
-
 export type {
 	AssistantMessage,
 	AudioConfig,
@@ -171,7 +170,28 @@ export type {
 	Truncation,
 	UserMessage,
 } from "./types";
-
 export { zodToJsonSchema } from "./utils/zod";
 export type { ValidationResult } from "./validate-agent";
 export { validateAgent } from "./validate-agent";
+export type {
+	StreamedWorkflowResult,
+	Workflow,
+	WorkflowAgentTask,
+	WorkflowConfig,
+	WorkflowEvent,
+	WorkflowFunctionTask,
+	WorkflowOptions,
+	WorkflowPhaseOptions,
+	WorkflowPhaseResult,
+	WorkflowPhaseStatus,
+	WorkflowRunResult,
+	WorkflowRunSnapshot,
+	WorkflowRunStatus,
+	WorkflowRuntimeContext,
+	WorkflowTask,
+	WorkflowTaskBase,
+	WorkflowTaskExecuteParams,
+	WorkflowTaskResult,
+	WorkflowTaskStatus,
+} from "./workflow";
+export { runWorkflow, streamWorkflow, workflow, workflowTask } from "./workflow";

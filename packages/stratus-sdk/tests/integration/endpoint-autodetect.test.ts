@@ -336,7 +336,7 @@ responsesDescribe("Responses API — full URL", () => {
 		const m = new AzureResponsesModel({
 			endpoint: fullResponsesUrl,
 			apiKey,
-			deployment: responsesDeployment,
+			deployment: azureResponsesDeployment,
 			apiVersion: "this-is-ignored",
 		});
 		const agent = new Agent({

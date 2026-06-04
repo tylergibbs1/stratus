@@ -18,12 +18,13 @@ A TypeScript agent SDK purpose-built for Azure OpenAI.
 - **One line to start** — `createModel()` reads your env vars. No config objects, no API version guessing.
 - **One interface, two backends** — Chat Completions and Responses API through the same agent, tool, and session code.
 - **Agents that compose** — handoffs, subagents, guardrails, and hooks in a single run loop. Deny or modify tool calls at runtime.
+- **Workflow orchestration** — fan out bounded parallel agent tasks, stream progress events, resume completed work from snapshots, and synthesize the final answer.
 - **Human-in-the-loop** — permission callbacks, per-tool approval, glob-filtered tools, and graceful mid-run interrupts.
 - **State you own** — save, resume, and fork conversations as JSON. No server-side threads.
 - **Type-safe end to end** — Zod schemas drive parameters, structured output, and validation. Types flow through agents, hooks, and guardrails at compile time.
 - **Zero dep** — only Zod as a peer dep.
 
-`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
+`agents` `tools` `streaming` `structured output` `handoffs` `subagents` `workflows` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
 
 ## Install
 
@@ -263,6 +264,72 @@ const parentAgent = new Agent({
   ],
 });
 ```
+
+### Workflows
+
+Use workflows when the orchestration itself should live in code: audits, migrations, research passes, and verification loops that need many agents without stuffing every intermediate result into one conversation.
+
+```ts
+import { Agent, createModel, runWorkflow, workflow, workflowTask } from "@usestratus/sdk";
+
+const model = createModel();
+
+const reviewer = new Agent({
+  name: "reviewer",
+  instructions: "Review the target carefully and report concrete findings only.",
+  model,
+});
+
+const synthesizer = new Agent({
+  name: "synthesizer",
+  instructions: "Merge independent findings into a concise final report.",
+  model,
+});
+
+const auditWorkflow = workflow({
+  name: "parallel-audit",
+  run: async (ctx, files: string[]) => {
+    const findings = await ctx.phase(
+      "review files",
+      files.map((file) =>
+        workflowTask({
+          id: file,
+          name: `review ${file}`,
+          agent: reviewer,
+          input: `Audit ${file} for correctness, security, and missing tests.`,
+          metadata: { file },
+        }),
+      ),
+      { concurrency: 8, failFast: false },
+    );
+
+    const synthesis = await ctx.synthesize(
+      synthesizer,
+      findings
+        .map((finding) => `## ${finding.name}\n${finding.output || finding.error}`)
+        .join("\n\n"),
+    );
+
+    return synthesis.output;
+  },
+});
+
+const result = await runWorkflow(auditWorkflow, [
+  "src/routes/users.ts",
+  "src/routes/billing.ts",
+]);
+
+console.log(result.output);
+console.log(result.usage.totalTokens);
+```
+
+Workflows support:
+- Bounded parallel phases (`concurrency`, capped by `maxConcurrency`)
+- Progress streaming with `streamWorkflow()`
+- `AbortSignal` cancellation
+- `failFast: false` phases for tolerant audit-style runs
+- `resumeFrom` snapshots that skip completed task IDs
+- Custom function tasks for non-model work alongside agent tasks
 
 ### Guardrails
 
