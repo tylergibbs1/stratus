@@ -8,12 +8,10 @@
 
 # Stratus
 
-[usestratus.dev](https://usestratus.dev)
-
 [![npm version](https://img.shields.io/npm/v/@usestratus/sdk)](https://www.npmjs.com/package/@usestratus/sdk)
 [![CI](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml/badge.svg)](https://github.com/tylergibbs1/stratus/actions/workflows/ci.yml)
 
-A TypeScript agent SDK purpose-built for Azure OpenAI.
+A TypeScript agent SDK purpose-built for Azure OpenAI. Docs: [usestratus.dev](https://usestratus.dev).
 
 - **One line to start** — `createModel()` reads your env vars. No config objects, no API version guessing.
 - **One interface, two backends** — Chat Completions and Responses API through the same agent, tool, and session code.
@@ -21,7 +19,7 @@ A TypeScript agent SDK purpose-built for Azure OpenAI.
 - **Human-in-the-loop** — permission callbacks, per-tool approval, glob-filtered tools, and graceful mid-run interrupts.
 - **State you own** — save, resume, and fork conversations as JSON. No server-side threads.
 - **Type-safe end to end** — Zod schemas drive parameters, structured output, and validation. Types flow through agents, hooks, and guardrails at compile time.
-- **Zero dep** — only Zod as a peer dep.
+- **Minimal dependencies** — Zod is the only required peer dependency. Effect is an optional peer for `@usestratus/sdk/effect`.
 
 `agents` `tools` `streaming` `structured output` `handoffs` `subagents` `guardrails` `hooks` `tracing` `sessions` `abort signals` `code mode` `todo tracking` `cost tracking` `human-in-the-loop` `predicted output` `audio` `data sources` `context compaction` `background tasks` `testing utilities` `debug mode`
 
@@ -469,7 +467,7 @@ Implement the `Executor` interface for custom sandboxes (containers, Cloudflare 
 
 ## Imports
 
-Stratus provides four export paths:
+Stratus provides six export paths:
 
 ```ts
 // Everything (core + Azure)
@@ -480,6 +478,12 @@ import { Agent, run, tool, validateAgent } from "@usestratus/sdk/core";
 
 // Azure provider only
 import { createModel, AzureResponsesModel } from "@usestratus/sdk/azure";
+
+// Vercel AI SDK UI stream interop
+import { createStratusChatResponse } from "@usestratus/sdk/ai-sdk";
+
+// Effect wrappers (requires the optional `effect` peer dependency)
+import { effectTool, runEffect } from "@usestratus/sdk/effect";
 
 // Test utilities (keep out of production bundles)
 import { createMockModel, textResponse, toolCallResponse } from "@usestratus/sdk/testing";
@@ -585,7 +589,7 @@ try {
 
 ## Packages
 
-Stratus is a monorepo with two packages:
+Stratus is a monorepo with one published package:
 
 | Package | Description |
 |---|---|
@@ -594,8 +598,15 @@ Stratus is a monorepo with two packages:
 ## Development
 
 ```bash
-bun install       # Install all workspace dependencies
-bun test          # Run tests (all packages)
-bun run lint      # Lint with Biome
-bun run typecheck # TypeScript type checking
+bun install                          # Install all workspace dependencies
+bun run test                         # Run tests (all packages)
+bun run lint                         # Lint with Biome
+bun run build                        # Build all packages
+bun run --filter '*' typecheck       # TypeScript type checking
 ```
+
+Runnable examples live in [`packages/stratus-sdk/examples/`](packages/stratus-sdk/examples/). `bun run smoke:real-ai-sdk` runs the real-API examples against your Azure deployment.
+
+## License
+
+[MIT](LICENSE)
